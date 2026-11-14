@@ -1,309 +1,52 @@
-# SPACE NASA CHALLENGE 2026
-
-## Objetivo
-
-Desarrollar una herramienta visual para ayudar a los astronautas a evaluar su propia salud durante misiones espaciales, identificar riesgos potenciales y recibir recomendaciones rápidas para mejorar su bienestar o solicitar atención médica especializada.
-
-La solución debe combinar:
-- entrada de datos del usuario (texto, clics, cámara o mediciones)
-- análisis de indicadores clave de salud
-- visualización clara con colores, gráficos y referencias rápidas
-- recomendaciones de acción según el riesgo detectado
-
-## Idea central del producto
-
-Una aplicación web de dashboard para astronautas que:
-- permite registrar métricas de salud básicas y síntomas
-- presenta el estado general del cuerpo con un diagrama visual interactivo
-- compara valores actuales con rangos de referencia
-- identifica señales de alerta y prioriza recomendaciones
-- sugiere acciones preventivas o avisos para la tripulación o médicos de tierra
-
-## Contexto científico y uso
-
-El sistema puede apoyarse en conocimientos de la NASA Human Research Program y otras fuentes públicas sobre riesgos de la exploración espacial, por ejemplo:
-- microgravedad
-- radiación
-- sueño insuficiente
-- estrés psicológico
-- exposición a ambientes cerrados
-- cambios metabólicos y cardiovasculares
-- deshidratación y pérdida muscular
-
-## MVP propuesto
-
-### 1. Registro cotidiano de salud
-- peso, presión arterial, frecuencia cardíaca
-- glucosa en sangre
-- hidratación
-- sueño y fatiga
-- dolor o molestias por región corporal
-- síntomas de mareo, náusea, visión borrosa, debilidad
-
-### 2. Evaluación visual interactiva
-- figura humana con partes del cuerpo clicables
-- cada zona muestra estado, riesgos y recomendaciones
-- color coding: normal / atención / crítico
-
-### 3. Recomendaciones
-- descansos, hidratación, actividad física, alimentación
-- pasos inmediatos para evitar condiciones graves
-- enlace a protocolos de soporte o contacto con médico
-
-### 4. Evolución temporal
-- historial de métricas durante la misión
-- gráficos de tendencia por indicador
-- alertas cuando un valor empeora
-
-## Stack sugerido para el MVP
-
-Se recomienda una base simple y rápida de desarrollar:
-- HTML5 + CSS3 + JavaScript (frontend web)
-- sin framework pesado para arrancar rápido
-- estructura modular por componentes y servicios
-- posibilidad de escalar a React en una segunda etapa si el proyecto crece
-
-## Estructura del proyecto
-
-```text
-space-nasa-challenge-2026/
-├── README.md
-├── .gitignore
-├── index.html
-├── assets/
-│   └── README.md
-├── docs/
-│   └── roadmap.md
-├── src/
-│   ├── main.js
-│   ├── styles.css
-│   ├── components/
-│   │   └── HealthPanel.js
-│   ├── data/
-│   │   └── health-metrics.js
-│   ├── services/
-│   │   └── assessment.js
-│   └── utils/
-│       └── formatters.js
-├── tests/
-│   └── assessment.test.js
-└── .vscode/
-    └── settings.json
-```
-
-## Plan inicial de trabajo
+# ORBITAL — Mission Health
 
-### Fase 1: Investigación y definición del alcance
-- Definir 5 a 8 indicadores clave para el MVP.
-- Revisar riesgos y rangos de referencia fiables para el entorno espacial.
-- Establecer qué datos se pueden tomar en una misión realista.
-- Documentar qué señales ameritan alerta y qué pasos recomienda la herramienta.
+ORBITAL is a multi-page, locally run astronaut wellness prototype inspired by NASA's Human Research Program. It brings crew check-ins, spaceflight hazard context, an interactive anatomy viewer, an Ollama-powered local information assistant, and optional wellness mini-games into one presentation-ready experience.
 
-### Fase 2: Diseño de UX y modelo de datos
-- Diseñar una interfaz clara para astronautas con pocas distracciones.
-- Definir estados visuales: normal, advertencia, crítico.
-- Crear un modelo de datos para métricas, síntomas y recomendaciones.
-- Validar que las pantallas sean legibles en entorno táctil y con tiempos de reacción bajos.
+## Run locally
 
-### Fase 3: Primer prototipo funcional
-- Crear un dashboard con panel principal de salud.
-- Añadir registro manual de métricas.
-- Implementar lógica de evaluación simple por indicador.
-- Mostrar resumen de estado general con secciones por riesgo.
+Requirements: Node.js and Ollama. No npm packages are required.
 
-### Fase 4: Visualización y seguimiento temporal
-- Añadir gráficos históricos por indicador.
-- Presentar tendencia durante varios días.
-- Mostrar marcas de alerta y cambios de comportamiento.
+1. Start Ollama. The assistant uses the Ollama service at `http://127.0.0.1:11434`.
+2. Install a local model if one is not already available:
 
-### Fase 5: Recomendaciones y gamificación
-- Introducir checklist y recordatorios para hábitos saludables.
-- Añadir sistema de puntos, logros o streaks motivacionales.
-- Hacer que la herramienta sea útil como parte de la rutina de la misión.
+   ```bash
+   ollama pull qwen3:4b
+   ```
 
-### Fase 6: Validación y refinamiento
-- Probar con usuarios ficticios y escenarios de estrés.
-- Revisar claridad de mensajes y prioridad de alertas.
-- Mejorar la accesibilidad visual y la simplicidad del uso.
-- Preparar la versión final para presentación.
+3. In the project directory, run:
 
-## Reglas de diseño para la solución
+   ```bash
+   npm start
+   ```
 
-- Priorizar legibilidad sobre complejidad.
-- Mantener la información condensada en paneles rápidos.
-- Usar indicadores de color con lógica clara y mensajes no ambiguos.
-- Evitar mensajes de alarmas excesivamente técnicos para el usuario final.
-- Diseñar para que el astronauta pueda entender "qué está pasando" y "qué debe hacer ahora".
+4. Open [http://localhost:4173](http://localhost:4173).
 
-## Criterios de éxito del proyecto
+The pages are `index.html` (mission overview), `health.html` (readings, trends, symptoms and export), `hazards.html` (NASA/CSA research context), `anatomy.html` (interactive 3D model), `assistant.html` (local Ollama chat), and `training.html` (three optional mini-games).
 
-La solución será exitosa si:
-- permite evaluar rápidamente el estado de salud del astronauta
-- identifica riesgos importantes con un lenguaje claro
-- ofrece recomendaciones concretas y accionables
-- presenta la información con una experiencia visual clara
-- tiene una base extensible para futuras mediciones y validaciones científicas
+## Features
 
-## Roadmap sugerido
+- Collapsible, responsive navigation shared across all pages; orbital stars, animated planets, and low-motion support.
+- Editable crew health readings with locally stored trends, symptom notes, and a CSV summary.
+- Interactive summaries of NASA's five human-spaceflight hazards, with direct NASA and Canadian Space Agency resources.
+- Selectable 3D anatomy structures with colors associated with entered readings and symptom regions.
+- Local assistant: a small Node server proxies requests to Ollama on the same computer. Conversation context stays in page memory for the current session and is not written to browser storage.
+- Optional paced breathing, visual attention, and sequence-recall activities. Scores stay in browser storage.
 
-### Sprint 1 - Fundamentos
-- definir objetivos y métricas
-- crear estructura inicial del proyecto
-- construir dashboard básico
-- documentar reglas de evaluación
+## Data and safety
 
-### Sprint 2 - Funcionalidad central
-- registro de indicadores
-- scoring de salud
-- panel corporal interactivo
-- recomendaciones por riesgo
+Health readings and symptom notes are stored in this browser's `localStorage`. Ollama prompts and health context go to the local Ollama service through the Node server; they are not sent to a hosted AI service by this app. Conversation context remains in page memory for the current session and is not written to browser storage. The anatomy model and Three.js modules are loaded from public CDNs, so the 3D viewer needs an internet connection.
 
-### Sprint 3 - Interacción y visualización
-- charts temporales
-- animaciones suaves
-- diseño final de la interfaz
-- pruebas de uso
+This is an educational hackathon prototype, not a medical device or clinical decision system. The dashboard ranges are illustrative and not personalized clinical thresholds. The local model can make mistakes; it cannot diagnose, prescribe, or replace a Crew Medical Officer, flight surgeon, approved mission checklist, or other mission-specific medical direction. New, severe, or worsening symptoms should be shared with the crew medical team using the mission's approved procedures.
 
-### Sprint 4 - Preparación para presentación
-- refinamiento visual
-- documentación del proyecto
-- demo narrativa
-- resumen técnico y científico
+## Research resources
 
-## Próximos pasos
+- [NASA: Five Hazards of Human Spaceflight](https://www.nasa.gov/hrp/hazards/)
+- [NASA: Risks of Human Spaceflight](https://www.nasa.gov/hrp/risks/)
+- [NASA: Ongoing HRP Research in Space](https://www.nasa.gov/hrp/ongoing-hrp-research/)
+- [CSA: Monitoring Radiation for Astronaut Health](https://www.asc-csa.gc.ca/eng/news/articles/2026/2026-02-26-monitoring-radiation-astronaut-health.asp)
+- [CSA: Why Do We Conduct Science Experiments in Space?](https://www.asc-csa.gc.ca/eng/iss/science/why-do-we-conduct-science-experiments-in-space.asp)
+- [NASA: In-flight medical care](https://www.nasa.gov/ochmo/health-and-medical-systems/in-flight-medical-care/)
 
-1. Elegir las métricas principales del MVP.
-2. Diseñar las pantallas del dashboard.
-3. Implementar la lógica de análisis básico.
-4. Añadir historial y alertas.
-5. Preparar una demostración clara para la presentación del reto.
+## Credits
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+3D anatomy model: [open-anatomy-3d](https://github.com/MervinR07/open-anatomy-3d), with attribution displayed in the anatomy page. Local language model: [Qwen3 on Ollama](https://ollama.com/library/qwen3). See the source project for its model and data licenses.

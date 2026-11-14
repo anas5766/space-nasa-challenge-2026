@@ -1,0 +1,9 @@
+{
+    "name":  "orbital-mission-health",
+    "version":  "1.0.0",
+    "private":  true,
+    "description":  "Multi-page astronaut mission health prototype with local AI, interactive anatomy, and wellness games",
+    "scripts":  {
+                    "start":  "node server.js"
+                }
+}

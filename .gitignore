@@ -1,0 +1,41 @@
+# Space NASA Challenge 2026
+
+This repository is initialized as the base for a browser-based health assessment tool for astronauts.
+
+## Local setup
+
+Open the project in a browser directly or serve it locally with a simple static http server.
+
+```bash
+python -m http.server 8000
+```
+
+Then open:
+
+http://localhost:8000
+
+## Project structure
+
+```text
+space-nasa-challenge-2026/
+├── README.md
+├── .gitignore
+├── index.html
+├── src/
+│   ├── main.js
+│   ├── styles.css
+│   ├── components/
+│   │   └── HealthPanel.js
+│   ├── data/
+│   │   └── health-metrics.js
+│   ├── services/
+│   │   └── assessment.js
+│   └── utils/
+│       └── formatters.js
+├── tests/
+│   └── assessment.test.js
+├── docs/
+│   └── roadmap.md
+└── assets/
+    └── README.md
+```

@@ -1,0 +1,47 @@
+import { HEALTH_METRICS, BODY_ZONES } from './data/health-metrics.js';
+import { generateHealthSummary, evaluateMetric } from './services/assessment.js';
+import { renderHealthPanel } from './components/HealthPanel.js';
+
+const summaryEl = document.getElementById('summary');
+const metricsEl = document.getElementById('metricsList');
+const bodyMapEl = document.getElementById('bodyMap');
+
+const missionMetrics = [
+  { name: 'Heart Rate', value: 74, unit: 'bpm', status: 'normal', healthyRange: [60, 90] },
+  { name: 'Blood Sugar', value: 92, unit: 'mg/dL', status: 'normal', healthyRange: [70, 140] },
+  { name: 'Hydration', value: 63, unit: '%', status: 'warning', healthyRange: [65, 100] },
+  { name: 'Sleep', value: 6.5, unit: 'hrs', status: 'warning', healthyRange: [7, 9] }
+];
+
+const summary = generateHealthSummary(missionMetrics);
+summaryEl.innerHTML = summary.map((item) => `
+  <div class="summary-item ${item.state}">
+    <span>${item.label}</span>
+    <strong>${item.value}</strong>
+  </div>
+`).join('');
+
+metricsEl.innerHTML = missionMetrics.map((metric) => {
+  const result = evaluateMetric(metric);
+  return `
+    <div class="metric-card ${result.state}">
+      <div class="metric-header">
+        <span>${metric.name}</span>
+        <span class="badge ${result.state}">${result.state}</span>
+      </div>
+      <div class="metric-value">${metric.value} ${metric.unit}</div>
+      <div class="metric-note">${result.message}</div>
+    </div>
+  `;
+}).join('');
+
+bodyMapEl.innerHTML = BODY_ZONES.map((zone) => `
+  <button class="zone ${zone.status}" type="button">
+    <span>${zone.label}</span>
+  </button>
+`).join('');
+
+renderHealthPanel({
+  title: 'Astronaut health overview',
+  metrics: HEALTH_METRICS
+});

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Space Health Monitor</title>
+    <link rel="stylesheet" href="src/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Mission Command</p>
+          <h1>Space Health Monitor</h1>
+        </div>
+        <button class="status-badge">System: Stable</button>
+      </header>
+
+      <main class="dashboard">
+        <section class="panel overview">
+          <h2>Mission Overview</h2>
+          <div id="summary" class="summary-grid"></div>
+        </section>
+
+        <section class="panel body-map">
+          <h2>Body Status</h2>
+          <div id="bodyMap" class="body-map-grid"></div>
+        </section>
+
+        <section class="panel metrics">
+          <h2>Vital Metrics</h2>
+          <div id="metricsList" class="metrics-list"></div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>

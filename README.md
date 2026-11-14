@@ -178,16 +178,6 @@ La solución será exitosa si:
 4. Añadir historial y alertas.
 5. Preparar una demostración clara para la presentación del reto.
 
-## Nota
-
-Este repositorio se usará como punto de partida para la primera versión del proyecto. La estructura está preparada para crecer con nuevas métricas, módulos de análisis y visualizaciones. 
-
----
-
-Este documento puede revisarse y ampliarse según el enfoque final del equipo, pero sirve como base sólida para empezar el desarrollo.
-
-
-
 
 
 

@@ -29,7 +29,7 @@ The pages are `index.html` (mission overview), `health.html` (readings, trends, 
 - Editable crew health readings with locally stored trends, symptom notes, and a CSV summary.
 - Interactive summaries of NASA's five human-spaceflight hazards, with direct NASA and Canadian Space Agency resources.
 - Selectable 3D anatomy structures with colors associated with entered readings and symptom regions.
-- Local assistant: a small Node server proxies requests to Ollama on the same computer. Conversation context stays in page memory for the current session and is not written to browser storage.
+- Local assistant: a small Node server verifies each selected model against the installed local Ollama model list, rejects cloud models, and proxies requests to Ollama on the same computer. Conversation context stays in page memory for the current session and is not written to browser storage.
 - Optional paced breathing, visual attention, and sequence-recall activities. Scores stay in browser storage.
 
 ## Data and safety

@@ -42,6 +42,44 @@ function proxyToOllama(request, response, apiPath, body = null) {
   else upstream.end();
 }
 
+function chatWithInstalledLocalModel(request, response, payload) {
+  if (/cloud/i.test(payload.model)) {
+    response.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    response.end(JSON.stringify({ error: 'Cloud models are disabled. Select a model installed for local inference.' }));
+    return;
+  }
+  const check = http.get({ hostname: '127.0.0.1', port: 11434, path: '/api/tags', timeout: 10_000 }, (tagsResponse) => {
+    let raw = '';
+    tagsResponse.setEncoding('utf8');
+    tagsResponse.on('data', (chunk) => { raw += chunk; });
+    tagsResponse.on('end', () => {
+      if (tagsResponse.statusCode !== 200) {
+        response.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        response.end(JSON.stringify({ error: 'Could not verify local Ollama models.' }));
+        return;
+      }
+      let models;
+      try { models = JSON.parse(raw).models || []; } catch {
+        response.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        response.end(JSON.stringify({ error: 'Ollama returned an invalid local model list.' }));
+        return;
+      }
+      if (!models.some((model) => model.name === payload.model)) {
+        response.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        response.end(JSON.stringify({ error: 'The selected model is not installed locally. Refresh the model list and choose a local model.' }));
+        return;
+      }
+      proxyToOllama(request, response, '/api/chat', payload);
+    });
+  });
+  check.on('timeout', () => check.destroy(new Error('Ollama model lookup timed out')));
+  check.on('error', (error) => {
+    if (response.headersSent) return response.destroy(error);
+    response.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    response.end(JSON.stringify({ error: `Ollama is unavailable: ${error.message}` }));
+  });
+}
+
 const server = http.createServer((request, response) => {
   let pathname;
   try {
@@ -76,7 +114,7 @@ const server = http.createServer((request, response) => {
         response.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' }).end(JSON.stringify({ error: 'A model and chat messages are required' }));
         return;
       }
-      proxyToOllama(request, response, '/api/chat', payload);
+      chatWithInstalledLocalModel(request, response, payload);
     });
     return;
   }

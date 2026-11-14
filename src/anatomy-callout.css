@@ -1,0 +1,119 @@
+.anatomy-callout-layer {
+  position: absolute;
+  z-index: 7;
+  inset: 0;
+  pointer-events: none;
+}
+
+.anatomy-callout-layer[hidden] {
+  display: none;
+}
+
+.anatomy-callout-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 0 5px #52e9ff88);
+}
+
+#anatomyCalloutLine {
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.anatomy-callout-anchor {
+  stroke: #eaffff;
+  stroke-width: 1.5;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: callout-pulse 1.7s ease-out infinite;
+}
+
+.anatomy-callout-card {
+  position: absolute;
+  display: grid;
+  gap: 7px;
+  width: min(228px, calc(100% - 24px));
+  padding: 12px 13px;
+  border: 1px solid #54d9e366;
+  border-radius: 6px;
+  background: linear-gradient(145deg, #061824ed, #07111deF 75%);
+  box-shadow: 0 12px 38px #0009, inset 0 0 26px #42d9e210, 0 0 18px #42d9e21a;
+  backdrop-filter: blur(12px);
+  transition: border-color .2s, box-shadow .2s;
+}
+
+.anatomy-callout-card[data-level="warning"] {
+  border-color: #f1d35a99;
+  box-shadow: 0 12px 38px #0009, inset 0 0 26px #f1d35a12, 0 0 20px #f1d35a22;
+}
+
+.anatomy-callout-card[data-level="moderate"] {
+  border-color: #ff963faa;
+  box-shadow: 0 12px 38px #0009, inset 0 0 26px #ff963f14, 0 0 20px #ff963f26;
+}
+
+.anatomy-callout-card[data-level="critical"] {
+  border-color: #fb5563c9;
+  box-shadow: 0 12px 38px #0009, inset 0 0 26px #fb556318, 0 0 22px #fb556333;
+}
+
+.anatomy-callout-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  color: #7ce6c0;
+  font: 7px var(--mono);
+  letter-spacing: .6px;
+}
+
+.anatomy-callout-status:before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #32d69a;
+  box-shadow: 0 0 9px #32d69a99;
+  content: "";
+}
+
+.anatomy-callout-card[data-level="warning"] .anatomy-callout-status { color: #f1d35a; }
+.anatomy-callout-card[data-level="warning"] .anatomy-callout-status:before { background: #f1d35a; box-shadow: 0 0 9px #f1d35a99; }
+.anatomy-callout-card[data-level="moderate"] .anatomy-callout-status { color: #ff963f; }
+.anatomy-callout-card[data-level="moderate"] .anatomy-callout-status:before { background: #ff963f; box-shadow: 0 0 9px #ff963f99; }
+.anatomy-callout-card[data-level="critical"] .anatomy-callout-status { color: #fb7782; }
+.anatomy-callout-card[data-level="critical"] .anatomy-callout-status:before { background: #fb5563; box-shadow: 0 0 9px #fb556399; }
+
+.anatomy-callout-card strong {
+  color: #e8fbff;
+  font-size: 11px;
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+.anatomy-callout-card p {
+  margin: 0;
+  color: #9eb9c4;
+  font-size: 8px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+@keyframes callout-pulse {
+  0% { opacity: .96; transform: scale(1); }
+  72%, 100% { opacity: .2; transform: scale(2.5); }
+}
+
+@media (max-width: 720px) {
+  .anatomy-callout-card { width: min(196px, calc(100% - 24px)); padding: 9px 10px; gap: 5px; }
+  .anatomy-callout-card strong { font-size: 9px; }
+  .anatomy-callout-card p { font-size: 7px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anatomy-callout-anchor { animation: none; }
+}

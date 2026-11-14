@@ -63,6 +63,7 @@ const cosmic = document.createElement('div');
 cosmic.className = 'cosmic-orbits';
 cosmic.setAttribute('aria-hidden', 'true');
 cosmic.innerHTML = `
+  <canvas class="cosmic-webgl-canvas" aria-hidden="true"></canvas>
   <span class="cosmic-orbit orbit-one"><i class="orbiting-planet planet-blue"></i></span>
   <span class="cosmic-orbit orbit-two"><i class="orbiting-planet planet-cyan"></i></span>
   <span class="cosmic-orbit orbit-three"><i class="orbiting-planet planet-rose"></i></span>
@@ -83,6 +84,20 @@ cosmic.innerHTML = `
   <span class="cosmic-scan-arc arc-one"></span><span class="cosmic-scan-arc arc-two"></span>
 `;
 document.body.append(cosmic);
+
+import('./cosmos.js').then(({ mountCosmosScene }) => mountCosmosScene(cosmic)).catch(() => {
+  cosmic.classList.add('cosmic-webgl-fallback');
+});
+
+document.querySelectorAll('.page-footer').forEach((footer) => {
+  const credit = document.createElement('a');
+  credit.className = 'cosmic-credit';
+  credit.href = 'https://cdn.solarsystemscope.com/textures/';
+  credit.target = '_blank';
+  credit.rel = 'noopener';
+  credit.textContent = 'SPACE TEXTURES · SOLAR SYSTEM SCOPE (CC BY 4.0)';
+  footer.append(credit);
+});
 
 let pointerFrame = 0;
 window.addEventListener('pointermove', (event) => {

@@ -433,6 +433,7 @@ export function mountAnatomyViewer(container, { onSelect = () => {} } = {}) {
     stopAutoRotate();
     const part = structureIndex.get(key);
     if (!part?.objects.length) return;
+    window.ORBITAL_AUDIO?.playCue('select');
     const layer = part.layer;
     if (layer && layerSettings.get(layer) === false) {
       layerSettings.set(layer, true);
@@ -527,9 +528,10 @@ export function mountAnatomyViewer(container, { onSelect = () => {} } = {}) {
     pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
     const hit = raycaster.intersectObject(modelRoot, true)[0];
-    if (hit?.object) showSelection(keyFor(hit.object));
+    if (hit?.object) { window.ORBITAL_AUDIO?.playCue('select'); showSelection(keyFor(hit.object)); }
   });
   container.querySelectorAll('[data-layer]:not(:disabled)').forEach((button) => button.addEventListener('click', () => {
+    window.ORBITAL_AUDIO?.playCue('switch');
     stopAutoRotate();
     const layer = button.dataset.layer;
     button.classList.toggle('active');
@@ -538,6 +540,7 @@ export function mountAnatomyViewer(container, { onSelect = () => {} } = {}) {
     applyLayerVisibility();
   }));
   container.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => {
+    window.ORBITAL_AUDIO?.playCue('switch');
     stopAutoRotate();
     const view = button.dataset.view;
     container.querySelectorAll('[data-view]').forEach((item) => item.classList.toggle('active', item === button));

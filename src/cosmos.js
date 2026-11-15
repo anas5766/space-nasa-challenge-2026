@@ -1,6 +1,6 @@
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+import * as THREE from '../assets/vendor/three/three.module.js';
 
-const TEXTURE_ROOT = 'https://cdn.solarsystemscope.com/textures/download/';
+const TEXTURE_ROOT = 'assets/solar-textures/';
 const TEXTURES = {
   galaxy: `${TEXTURE_ROOT}2k_stars_milky_way.jpg`,
   sun: `${TEXTURE_ROOT}2k_sun.jpg`,

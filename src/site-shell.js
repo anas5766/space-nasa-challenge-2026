@@ -1,62 +1,20 @@
-const pages = [
-  ['index.html', '◫', 'Mission overview'],
-  ['health.html', '⌁', 'Health metrics'],
-  ['hazards.html', '☼', 'Spaceflight hazards'],
-  ['anatomy.html', '◎', '3D anatomy'],
-  ['assistant.html', '✳', 'Local AI assistant'],
-  ['training.html', '✦', 'Wellness training'],
-];
+const current = location.pathname.split('/').pop() || 'index.html';
+document.body.dataset.page = current.replace(/\.html?$/, '');
+document.body.classList.add('planet-navigation-shell');
+document.querySelector('.sidebar')?.remove();
+document.querySelectorAll('.avatar-small').forEach((avatar) => avatar.remove());
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js').catch(() => {});
 
-const sidebar = document.querySelector('.sidebar');
-if (sidebar) {
-  const current = location.pathname.split('/').pop() || 'index.html';
-  sidebar.innerHTML = `
-    <div class="sidebar-brand-row"><a class="brand" href="index.html" aria-label="Valmed home"><span class="brand-mark"><span></span><span></span><span></span></span><span>Valmed<small>MISSION HEALTH</small></span></a><button class="sidebar-toggle" type="button" aria-label="Collapse navigation" aria-controls="primary-navigation" aria-expanded="true" title="Collapse navigation">‹</button></div>
-    <div class="mission-chip"><span class="live-dot"></span><div><small>WORKSPACE</small><strong>LOCAL PROTOTYPE</strong></div></div>
-    <nav class="nav-links" id="primary-navigation" aria-label="Main navigation">${pages.map(([file, icon, title]) => `<a class="nav-link${current === file ? ' active' : ''}" href="${file}" title="${title}"${current === file ? ' aria-current="page"' : ''}><span class="nav-icon">${icon}</span><span class="nav-label">${title}</span><span class="nav-arrow">↗</span></a>`).join('')}</nav>
-    <div class="sidebar-bottom"><a class="crew-card" href="health.html"><span class="crew-avatar">AC</span><span><strong>Alex Chen</strong><small>Mission specialist</small></span><span class="crew-online"></span></a><div class="sidebar-foot"><span>Valmed SYSTEMS <i>v1.0</i></span><span>BUILT TO EXPLORE <b>✦</b></span></div></div>`;
-
-  const toggle = sidebar.querySelector('.sidebar-toggle');
-  const shell = document.querySelector('.app-shell');
-  let saved = false;
-  try { saved = localStorage.getItem('orbital-nav-collapsed') === 'true'; } catch { /* Navigation still works without browser storage. */ }
-  shell?.classList.toggle('sidebar-collapsed', saved);
-  toggle.textContent = saved ? '›' : '‹';
-  toggle.setAttribute('aria-label', saved ? 'Expand navigation' : 'Collapse navigation');
-  toggle.setAttribute('aria-expanded', String(!saved));
-  const mobile = matchMedia('(max-width: 720px)');
-  if (mobile.matches) { toggle.textContent = '☰'; toggle.setAttribute('aria-label', 'Open navigation'); toggle.setAttribute('aria-expanded', 'false'); }
-  toggle.addEventListener('click', () => {
-    if (mobile.matches) {
-      shell.classList.toggle('sidebar-open');
-      const open = shell.classList.contains('sidebar-open');
-      toggle.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
-      toggle.setAttribute('aria-expanded', String(open));
-      toggle.textContent = open ? '×' : '☰';
-      return;
-    }
-    const collapsed = shell.classList.toggle('sidebar-collapsed');
-    try { localStorage.setItem('orbital-nav-collapsed', String(collapsed)); } catch { /* Collapsing still works for this visit. */ }
-    toggle.setAttribute('aria-label', collapsed ? 'Expand navigation' : 'Collapse navigation');
-    toggle.setAttribute('aria-expanded', String(!collapsed));
-    toggle.textContent = collapsed ? '›' : '‹';
-  });
-  mobile.addEventListener('change', (event) => {
-    shell?.classList.remove('sidebar-open');
-    toggle.textContent = event.matches ? '☰' : (shell?.classList.contains('sidebar-collapsed') ? '›' : '‹');
-    toggle.setAttribute('aria-label', event.matches ? 'Open navigation' : (shell?.classList.contains('sidebar-collapsed') ? 'Expand navigation' : 'Collapse navigation'));
-    toggle.setAttribute('aria-expanded', String(!event.matches && !shell?.classList.contains('sidebar-collapsed')));
-  });
-  document.addEventListener('click', (event) => {
-    if (mobile.matches && shell?.classList.contains('sidebar-open') && !sidebar.contains(event.target)) {
-      shell.classList.remove('sidebar-open'); toggle.textContent = '☰'; toggle.setAttribute('aria-label', 'Open navigation'); toggle.setAttribute('aria-expanded', 'false');
-    }
-  });
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && mobile.matches && shell?.classList.contains('sidebar-open')) {
-      shell.classList.remove('sidebar-open'); toggle.focus(); toggle.textContent = '☰'; toggle.setAttribute('aria-label', 'Open navigation'); toggle.setAttribute('aria-expanded', 'false');
-    }
-  });
+if (current !== 'index.html') {
+  const breadcrumb = document.querySelector('.topbar .breadcrumb');
+  if (breadcrumb) {
+    const sunRoute = document.createElement('a');
+    sunRoute.className = 'solar-return';
+    sunRoute.href = 'index.html';
+    sunRoute.setAttribute('aria-label', 'Return to the solar system and choose a planet');
+    sunRoute.innerHTML = '<span aria-hidden="true">☼</span><b>SOLAR SYSTEM</b>';
+    breadcrumb.replaceChildren(sunRoute);
+  }
 }
 
 const cosmic = document.createElement('div');
@@ -83,11 +41,14 @@ cosmic.innerHTML = `
   <span class="cosmic-constellation constellation-two"><i></i><i></i><i></i><i></i></span>
   <span class="cosmic-scan-arc arc-one"></span><span class="cosmic-scan-arc arc-two"></span>
 `;
-document.body.append(cosmic);
-
-import('./cosmos.js').then(({ mountCosmosScene }) => mountCosmosScene(cosmic)).catch(() => {
-  cosmic.classList.add('cosmic-webgl-fallback');
-});
+if (document.body.classList.contains('solar-command-page')) {
+  cosmic.remove();
+} else {
+  document.body.append(cosmic);
+  import('./cosmos.js').then(({ mountCosmosScene }) => mountCosmosScene(cosmic)).catch(() => {
+    cosmic.classList.add('cosmic-webgl-fallback');
+  });
+}
 
 document.querySelectorAll('.page-footer').forEach((footer) => {
   const credit = document.createElement('a');
@@ -139,11 +100,3 @@ document.addEventListener('pointerout', (event) => {
     card.style.removeProperty('--hover-y');
   }
 });
-
-document.addEventListener('keydown', (event) => {
-  if ((event.altKey || event.metaKey) && event.key.toLowerCase() === 'm') {
-    event.preventDefault();
-    sidebar?.querySelector('.sidebar-toggle')?.click();
-  }
-});
-

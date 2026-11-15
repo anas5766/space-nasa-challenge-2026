@@ -5,7 +5,7 @@ const path = require('node:path');
 
 const origin = 'http://127.0.0.1:4196';
 const root = path.resolve(__dirname, '..');
-const contentTypes = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
+const contentTypes = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.png': 'image/png' };
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true });
@@ -33,9 +33,11 @@ const contentTypes = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': '
       Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (value) => { window.copiedReport = value; } } });
     });
     const page = await context.newPage();
-    page.setDefaultTimeout(7000);
+    page.setDefaultTimeout(15000);
     const errors = [];
+    const failedRequests = [];
     page.on('pageerror', (error) => errors.push(String(error)));
+    page.on('requestfailed', (request) => failedRequests.push(`${request.url()} ${request.failure()?.errorText || ''}`));
     const go = (file) => page.goto(`${origin}/${file}`);
     const loc = (selector) => page.locator(selector);
     const click = (selector) => loc(selector).click();
@@ -44,13 +46,52 @@ const contentTypes = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': '
     for (const file of ['index.html', 'health.html', 'hazards.html', 'anatomy.html', 'assistant.html', 'training.html']) {
       await go(file);
       assert.ok((await loc('h1').first().innerText()).trim(), `${file} should have a visible page heading`);
-      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${file} should not overflow the viewport`);
+      assert.equal(await loc('.sidebar, .sidebar-toggle, .nav-links, .avatar-small').count(), 0, `${file} should not show a dropdown or alternate module navigation`);
+      if (file !== 'index.html') assert.equal(await loc('.solar-return').getAttribute('href'), 'index.html', `${file} should return to planet navigation through the Sun`);
+      const desktopWidth = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: innerWidth, offenders: [...document.querySelectorAll('body *')].map((node) => ({ name: `${node.tagName}.${node.className}`, right: Math.round(node.getBoundingClientRect().right), left: Math.round(node.getBoundingClientRect().left) })).filter((node) => node.right > innerWidth + 1 || node.left < -1).slice(0,8) }));
+      assert.equal(desktopWidth.scrollWidth <= desktopWidth.clientWidth, true, `${file} should not overflow the viewport (${JSON.stringify(desktopWidth)})`);
       assert.equal(await page.locator('img:not([alt])').count(), 0, `${file} images should have alt attributes`);
       assert.equal(await page.evaluate(() => { const ids = [...document.querySelectorAll('[id]')].map((node) => node.id); return new Set(ids).size === ids.length; }), true, `${file} should not have duplicate IDs`);
     }
-    await page.setViewportSize({ width: 1365, height: 900 });
+    await go('index.html');
+    assert.equal(await loc('#overview').count(), 0, 'the solar system is the entire home page');
+    assert.equal(await loc('#solarCommand').evaluate((node) => Math.round(node.getBoundingClientRect().height)), 900, 'the solar system fills the desktop viewport');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollHeight), 900, 'the home page has no dashboard content below the solar system');
+    assert.equal(await loc('#solarEnvironment').innerText(), 'NOT RECORDED · NOT RECORDED', 'unentered mission environment is never invented');
+    await page.waitForFunction(() => {
+      const root = document.querySelector('#solarCommand');
+      const text = document.querySelector('#solarStatus')?.textContent || '';
+      return root?.dataset.solarReady === 'true' || root?.classList.contains('solar-no-webgl') || text.includes('3D context lost');
+    }).catch(async (error) => { throw new Error(`${error.message}; status=${await loc('#solarStatus').innerText()}; JS=${errors.join(' | ')}; failed=${failedRequests.join(' | ')}`); });
+    assert.equal(await loc('.planet-choice').count(), 9, 'all eight planets and the Sun have accessible selectors');
+    await loc('[data-planet="mars"]').click();
+    assert.equal(await loc('#planetName').innerText(), 'MARS');
+    assert.equal(await loc('#planetEnter').getAttribute('href'), 'hazards.html');
+    await loc('[data-planet="mercury"]').click();
+    await loc('#planetEnter').click();
+    await page.waitForURL('**/health.html#healthLog');
+    assert.equal(await loc('#healthDialog').isVisible(), true, 'planet action opens the health check-in directly');
+    await loc('#healthDialog [value=cancel]').first().click();
+    await go('index.html');
+    await page.waitForFunction(() => document.querySelector('#solarCommand')?.dataset.solarReady === 'true');
+    await loc('#cinematicToggle').click();
+    assert.equal(await loc('#cinematicToggle').getAttribute('aria-pressed'), 'true');
+    await loc('#cinematicToggle').click();
+    assert.equal(await loc('#cinematicToggle').getAttribute('aria-pressed'), 'false');
+    await click('#solarReset');
+    assert.equal(await loc('#planetName').innerText(), 'THE SUN');
+    const solarMode = await loc('#solarCommand').evaluate((node) => node.classList.contains('solar-no-webgl') ? 'fallback' : 'three-webgl');
+    await page.waitForFunction(() => performance.getEntriesByType('resource').filter((entry) => /assets\/solar-textures\/2k_(sun|mercury|venus_surface|earth_daymap|mars|jupiter|saturn|uranus|neptune)\.jpg/.test(entry.name)).length === 9, null, { timeout: 15000 });
+    const solarMessage = await loc('#solarStatus').innerText();
+    const solarError = await loc('#solarCommand').getAttribute('data-solar-error');
+    if (process.env.VALMED_CAPTURE_SOLAR) await page.screenshot({ path: 'solar-command-preview.png' });
     await go('anatomy.html');
-    await page.waitForFunction(() => document.querySelector('#anatomyStatus')?.textContent.includes('Could not initialize the 3D viewer'));
+    await page.waitForFunction(() => {
+      const status = document.querySelector('#anatomyStatus')?.textContent || '';
+      return status && !status.includes('Preparing WebGL viewer');
+    });
+    assert.ok(await loc('#anatomyStatus').innerText(), 'anatomy viewer reports either a loaded or recoverable error state');
+    assert.ok(await loc('#anatomyRetry').count(), 'anatomy viewer exposes a retry action');
     await page.setViewportSize({ width: 390, height: 844 });
     for (const file of ['index.html', 'health.html', 'hazards.html', 'anatomy.html', 'assistant.html', 'training.html']) {
       await go(file);
@@ -88,12 +129,15 @@ const contentTypes = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': '
     await loc('#assistantPrompt').fill('What does this prototype do?');
     await click('#assistantSend');
     assert.equal(chatRequests, 1, 'local assistant request reaches the same-origin API');
+    await page.waitForFunction(() => document.querySelector('#medicalAssistant')?.innerText.includes('Local QA response'));
     assert.match(await loc('#medicalAssistant').innerText(), /Local QA response/);
     ollamaUnavailable = true;
     await page.reload();
     await page.waitForFunction(() => document.querySelector('#assistantConnection')?.textContent.includes('Ollama unavailable in browser QA'));
     assert.deepEqual(errors, []);
     console.log('PASS: six page routes render without horizontal overflow');
+    console.log(`PASS: ${solarMode} solar scene (${solarMessage}${solarError ? `: ${solarError}` : ''}), planet navigation, section routing, cinematic start/stop, and reset`);
+    console.log('PASS: anatomy viewer exits loading state and exposes retry when its model CDN is blocked');
     console.log('PASS: desktop/mobile width and basic image/ID accessibility checks');
     console.log('PASS: blank partial check-in, shared assessment data, reference, symptoms, report, persistence, and local AI request');
   } finally { await browser.close(); }

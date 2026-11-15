@@ -4,7 +4,7 @@ VALMED is a local, multi-page hackathon prototype for recording crew-reported he
 
 ## Quick start
 
-Requirements: Node.js 20+ and npm. Ollama is optional; only the local assistant needs it.
+Requirements: Node.js 20+ and npm. Three.js is installed locally. Ollama is optional; only the local assistant needs it.
 
 ```powershell
 npm install
@@ -21,7 +21,7 @@ Choose the exact installed model name in the assistant. The Node server only acc
 
 ## Pages
 
-- `index.html` — mission overview
+- `index.html` — full-screen Solar Command. Navigate to mission systems from the Sun and planets; module pages return through the Sun.
 - `health.html` — partial check-ins, local history, explainable signal review, symptom log, structured protocols, report and CSV export
 - `hazards.html` — five NASA human-spaceflight hazard domains with attributed source links
 - `anatomy.html` — symptom-linked 3D anatomy viewer
@@ -30,7 +30,7 @@ Choose the exact installed model name in the assistant. The Node server only acc
 
 ## Architecture and data flow
 
-This is a static multi-page frontend (HTML, CSS, and native JavaScript modules) served by a small Node.js loopback server. `src/health-state.js` reads and writes the shared browser records and calls the single deterministic engine in `src/services/health-risk-engine.mjs`. Health, Overview, and Anatomy read the same snapshot. Structured symptom protocols live in `src/protocols/`; the assistant adds optional local Ollama text but cannot override those protocol outcomes. `src/data/spaceflight-evidence.mjs` provides offline keyword retrieval over attributed NASA/CSA summaries. The service worker caches first-party Health/protocol resources; external 3D model libraries remain external dependencies.
+This is a static multi-page frontend (HTML, CSS, and native JavaScript modules) served by a small Node.js loopback server. `src/health-state.js` reads and writes the shared browser records and calls the single deterministic engine in `src/services/health-risk-engine.mjs`. Health, Overview, and Anatomy read the same snapshot. Structured symptom protocols live in `src/protocols/`; the assistant adds optional local Ollama text but cannot override those protocol outcomes. `src/data/spaceflight-evidence.mjs` provides offline keyword retrieval over attributed NASA/CSA summaries. The service worker caches first-party Health/protocol resources. Three.js and planet maps are local assets; the separate human anatomy model still uses its source project CDN.
 
 Flow: **check-in + symptom → local storage → shared snapshot / deterministic review → chart, body-map, protocol → optional Ollama context → crew report/CSV**. The synthetic 150-day scenario is loaded automatically in a fresh browser profile; on the Health page, **Switch to crew record** removes only tagged synthetic rows and leaves the crew record blank. Reloading or using the demo reset in the browser is enough to start the demonstration again.
 
@@ -53,7 +53,7 @@ Structured symptom protocols use deterministic questions and fixed escalation la
 
 ## Offline and privacy
 
-The service worker caches the Health and Anatomy shells and their first-party assessment dependencies after a successful online load. Check-ins, deterministic review, and structured protocols are designed to continue offline after the cache is populated. The 3D anatomy viewer uses third-party Three.js/model assets and may not render offline. Ollama inference is local to the same computer, but it still receives the conversation and selected health context; chat history is stored locally until cleared. No user accounts, encryption-at-rest, multi-crew separation, backup, or secure deletion are implemented. Do not enter real protected health information.
+The service worker caches first-party pages and dependencies after a successful online load. Check-ins, deterministic review, and structured protocols are designed to continue offline after the cache is populated. The 3D anatomy viewer uses third-party Three.js/model assets and may not render offline. Ollama inference is local to the same computer, but it still receives the conversation and selected health context; chat history is stored locally until cleared. No user accounts, encryption-at-rest, multi-crew separation, backup, or secure deletion are implemented. Do not enter real protected health information.
 
 The Node server binds to loopback, serves an allowlisted set of public files, blocks dotfiles and server-source access, checks browser origins for API requests, validates request sizes/context settings, and proxies only to local Ollama. This is a development prototype, not a hardened operational deployment.
 

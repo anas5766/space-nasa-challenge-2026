@@ -19,6 +19,19 @@
 html { scrollbar-color: #245264 #080c14; }
 ::selection { color: #06121a; background: #9cefff; }
 
+/* Planet-specific accents bind the inner tools to Solar Command. */
+body[data-page="index"] { --mission-accent: #e7bf78; }
+body[data-page="health"] { --mission-accent: #8ed9c1; }
+body[data-page="hazards"] { --mission-accent: #df9b7d; }
+body[data-page="anatomy"] { --mission-accent: #d8b58a; }
+body[data-page="assistant"] { --mission-accent: #d8c187; }
+body[data-page="training"] { --mission-accent: #88cbd1; }
+body[data-page] { --focus-cyan: var(--mission-accent, #9cefff); }
+body[data-page] .eyebrow-line { background: var(--mission-accent, #9cefff); }
+body[data-page] .nav-link.active .nav-icon { color: var(--mission-accent, #9cefff); }
+body[data-page] .topbar { border-bottom-color: color-mix(in srgb, var(--mission-accent, #9cefff) 16%, transparent); }
+body[data-page] .page-hero h1 em { color: color-mix(in srgb, var(--mission-accent, #9cefff) 78%, white 22%); }
+
 :where(button, a, input, select, textarea, summary):focus-visible {
   outline: 2px solid var(--focus-cyan);
   outline-offset: 3px;
@@ -414,3 +427,10 @@ dialog select,
   .sun-orbit { animation: none !important; }
   .audio-dock[data-audio="on"] .audio-toggle > span:first-child { animation: none; }
 }
+
+.app-shell { grid-template-columns: minmax(0, 1fr); }
+.app-shell > .sidebar { display: none !important; }
+.solar-return { display: inline-flex; align-items: center; gap: 9px; min-height: 38px; margin-right: 12px; padding: 6px 13px; border: 1px solid #e4bb6c77; border-radius: 7px; background: linear-gradient(135deg,#d9a84c1c,#82d6df0d); box-shadow: inset 0 0 14px #e5bd6410,0 0 18px #e5bd6415; color: #e3d4b1; text-decoration: none; font: 9px var(--mono); letter-spacing: .9px; white-space: nowrap; transition: color .2s, transform .2s, border-color .2s, box-shadow .2s, background .2s; }
+.solar-return span { color: #ffd27e; font-size: 24px; line-height: 1; text-shadow: 0 0 14px #efb94f99; }
+.solar-return:hover, .solar-return:focus-visible { color: #fff; border-color: #f3cd7e; background: linear-gradient(135deg,#e4b75c35,#82d6df17); box-shadow: inset 0 0 16px #e5bd6419,0 0 24px #e5bd6433; transform: translateY(-1px); }
+.solar-return:focus-visible { outline: 2px solid #a4e2e8; outline-offset: 3px; }

@@ -12,5 +12,8 @@
   "type": "module",
   "devDependencies": {
     "playwright": "^1.65.1"
+  },
+  "dependencies": {
+    "three": "^0.187.0"
   }
 }

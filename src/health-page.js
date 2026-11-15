@@ -166,6 +166,8 @@ function renderSymptoms() {
 
 const dialog = document.getElementById('healthDialog'); const form = document.getElementById('healthForm');
 document.getElementById('healthLog').addEventListener('click', () => { [...form.elements].filter((field) => defs.some(([id]) => id === field.name)).forEach((field) => { field.value = ''; }); dialog.showModal(); });
+if (location.hash === '#healthLog') requestAnimationFrame(() => document.getElementById('healthLog').click());
+if (location.hash === '#healthChart') requestAnimationFrame(() => document.getElementById('healthChart').scrollIntoView({ behavior: 'smooth', block: 'center' }));
 form.addEventListener('submit', (event) => {
   if (event.submitter?.value === 'cancel') return;
   event.preventDefault();

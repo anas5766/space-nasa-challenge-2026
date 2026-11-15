@@ -106,7 +106,7 @@ Open **Local AI Support** in the web app. The model selector should list `qwen3:
 3. If it is missing, run `ollama pull qwen3:4b` again.
 4. Return to the assistant page and press its refresh button.
 
-The web server uses port `4173`; Ollama uses port `11434`. The 3D anatomy viewer loads its model and Three.js modules from public CDNs, so it also needs internet access.
+The web server uses port `4173`; Ollama uses port `11434`. The Solar Command scene, planetary textures, and Three.js are bundled locally. The 3D anatomy model itself is fetched from its source project CDN and needs internet access.
 
 ## 6. Run project tests
 

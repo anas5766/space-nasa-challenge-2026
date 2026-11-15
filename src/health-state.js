@@ -64,7 +64,12 @@ export function readHealthSnapshot() {
       const age = now - Date.parse(symptom.at);
       return Number.isFinite(age) && age >= 0 && age < SYMPTOM_WINDOW_MS;
     })
-    .map((symptom) => ({ ...symptom, status: symptomStatus(symptom.severity) }))
+    .map((symptom) => ({
+      ...symptom,
+      status: symptom.protocolLevel === 'emergency' ? 'critical'
+        : symptom.protocolLevel === 'urgent' && symptomStatus(symptom.severity) === 'normal' ? 'moderate'
+          : symptomStatus(symptom.severity),
+    }))
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   const bodyRegions = {};
   for (const symptom of currentSymptoms) {

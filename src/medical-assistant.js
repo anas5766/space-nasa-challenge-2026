@@ -1,8 +1,10 @@
 import { addSymptomEntry, clearPendingMedicalAlert, readPendingMedicalAlert } from './health-state.js';
+import { evaluateProtocol } from './protocols/protocol-engine.mjs';
 
 const SYSTEM_PROMPT = `You are Valmed's local spaceflight health support assistant. Provide useful, specific, calm first-aid information and decision support for an astronaut. You are not a clinician and cannot establish a diagnosis or issue a prescription; do not use this limitation as a reason to refuse ordinary health guidance.
 
 Safety rules:
+- A saved VALMED structured protocol is deterministic, safety-prioritized guidance. Never downgrade, contradict, reinterpret, or replace it. The app bypasses Ollama while a protocol is active; after a documented resolution or flight-surgeon handoff, defer to the mission medical team and checklist.
 - Do not present a diagnosis as certain or say that the astronaut is safe based on limited data. When useful, give up to three plausible explanations explicitly labeled as possibilities, with the key uncertainty.
 - Give specific, low-risk first-aid and self-care steps that fit the described symptom, including what to stop doing, what to monitor, and when to reassess. Do not leave the astronaut with only a disclaimer or a generic instruction to contact someone.
 - Medication: do not prescribe, invent a drug/dose, or recommend changing a prescription. You may explain general medication safety and suggest checking the mission-approved formulary/checklist, allergies, interactions, and directions with the CMO/flight surgeon before taking an unfamiliar or non-approved medicine. If a mission-approved medication has already been assigned for this symptom, advise following its onboard instructions exactly.
@@ -36,6 +38,17 @@ function readSavedConversation() {
       && typeof message.content === 'string' && message.content.trim())
       .map(({ role, content }) => ({ role, content }));
   } catch { return []; }
+}
+
+function readActiveProtocol() {
+  try {
+    const runs = JSON.parse(localStorage.getItem('valmed-protocol-runs-v1') || '[]');
+    const latest = Array.isArray(runs) ? runs[0] : null;
+    if (!latest || latest.status === 'handed-off') return null;
+    const decision = evaluateProtocol({ symptom: latest.kind, answers: latest.answers || {} });
+    if (latest.status === 'resolved' && decision.level !== 'emergency') return null;
+    return { title: decision.protocol.title, ...decision };
+  } catch { return null; }
 }
 
 function removePrivateReasoning(value) {
@@ -390,6 +403,16 @@ export function initMedicalAssistant({ getContext }) {
     updateControls();
     root.classList.add('is-thinking');
     try {
+      const activeProtocol = readActiveProtocol();
+      if (activeProtocol) {
+        const answerText = `STRUCTURED PROTOCOL PRIORITY — ${activeProtocol.protocol.title}\n\n${activeProtocol.guidance}\n\nOllama was not used for this reply so it cannot contradict the active protocol. Record an action and outcome in Health; mark the flight-surgeon handoff only after the medical team has acknowledged the case.`;
+        answer.classList.remove('thinking');
+        answer.querySelector('p').textContent = answerText;
+        chatHistory.push({ role: 'assistant', content: answerText });
+        persistConversation();
+        if (attachedAlertId) clearPendingMedicalAlert(attachedAlertId);
+        return;
+      }
       const context = getContext();
       const systemContent = `${SYSTEM_PROMPT}\n\nCURRENT MESSAGE TRIAGE: ${currentRedFlag ? 'The user explicitly reports a current red-flag symptom. Put the mission emergency instruction first.' : 'No current red-flag symptom was explicitly identified in the latest message. Treat saved symptoms as historical context only and answer the actual question without immediate emergency escalation.'}\n\nCURRENT ASTRONAUT HEALTH CONTEXT (user-entered, unverified; logged symptoms may be historical):\n${context}`;
       const response = await fetch('/api/ollama/chat', {

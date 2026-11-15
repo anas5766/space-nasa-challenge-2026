@@ -1,4 +1,5 @@
 import { METRIC_DEFINITIONS, addSymptomEntry, announceHealthStateChange, metricStatus, readHealthHistory, readMetricLog, readSymptomLog, saveMetricLog, saveSymptomLog } from './health-state.js';
+import './protocols/protocol-ui.js';
 
 announceHealthStateChange();
 

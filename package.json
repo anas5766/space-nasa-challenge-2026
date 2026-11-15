@@ -4,6 +4,7 @@
     "private":  true,
     "description":  "Multi-page astronaut mission health prototype with local AI, interactive anatomy, and wellness games",
     "scripts":  {
-                    "start":  "node server.js"
+                    "start":  "node server.js",
+                    "test":  "node --test tests/protocol-engine.test.mjs"
                 }
 }

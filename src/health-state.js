@@ -151,8 +151,8 @@ export function clearPendingMedicalAlert(id) {
 
 export function announceHealthStateChange() {
   const snapshot = readHealthSnapshot();
-  window.ORBITAL_HEALTH = { ...snapshot.metricStatuses, bodyRegions: snapshot.bodyRegions, readings: snapshot.readings, currentSymptoms: snapshot.currentSymptoms };
-  window.dispatchEvent(new CustomEvent('orbital:health-update', { detail: window.ORBITAL_HEALTH }));
+  window.Valmed_HEALTH = { ...snapshot.metricStatuses, bodyRegions: snapshot.bodyRegions, readings: snapshot.readings, currentSymptoms: snapshot.currentSymptoms };
+  window.dispatchEvent(new CustomEvent('orbital:health-update', { detail: window.Valmed_HEALTH }));
   syncMedicalAlert(snapshot);
   return snapshot;
 }

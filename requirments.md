@@ -1,6 +1,6 @@
 # Windows Setup Requirements
 
-This guide installs the tools needed to run the ORBITAL web app and its local Ollama assistant.
+This guide installs the tools needed to run the Valmed web app and its local Ollama assistant.
 
 ## Requirements
 
@@ -131,4 +131,4 @@ Then open `http://localhost:4174`.
 
 ## Prototype notice
 
-ORBITAL is an educational hackathon prototype, not a medical device. Its measurements and color ranges are illustrative and must not replace mission medical procedures or advice from the crew medical team.
+Valmed is an educational hackathon prototype, not a medical device. Its measurements and color ranges are illustrative and must not replace mission medical procedures or advice from the crew medical team.

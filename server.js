@@ -145,5 +145,5 @@ const server = http.createServer((request, response) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`ORBITAL is available at http://localhost:${PORT}`);
+  console.log(`Valmed is available at http://localhost:${PORT}`);
 });

@@ -136,7 +136,7 @@ dialog select,
 .assistant-connection { line-height: 1.55; overflow-wrap: anywhere; }
 .assistant-safety { align-items: flex-start; }
 .assistant-safety p { font-size: 9px; line-height: 1.65; }
-.assistant-messages { overscroll-behavior: contain; scrollbar-color: #2a5965 #0a111b; }
+.assistant-messages { max-height: min(48vh, 620px); min-height: clamp(190px, 30vh, 360px); overscroll-behavior: contain; scrollbar-color: #2a5965 #0a111b; }
 .assistant-message { max-width: min(92%, 780px); }
 .assistant-message p { font-size: 10px; line-height: 1.7; }
 
@@ -163,6 +163,24 @@ dialog select,
 .assistant-form-footer > span { flex: 1; min-width: 0; max-width: 72ch; }
 .assistant-form-footer .button-primary { min-height: 34px; }
 .assistant-sources { line-height: 1.8; }
+.assistant-context-panel {
+  display: grid;
+  gap: 7px;
+  margin: 12px 14px 0;
+  padding: 11px 12px;
+  border: 1px solid #80ddeb20;
+  border-radius: 8px;
+  background: linear-gradient(105deg, #86e8ee08, #ffffff02);
+}
+.assistant-context-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.assistant-context-heading > span { color: #829baa; font: 7px var(--mono); letter-spacing: .8px; }
+.assistant-context-heading > strong { color: #c8edf0; font: 8px var(--mono); text-align: right; }
+.assistant-context-track { height: 6px; overflow: hidden; border-radius: 8px; background: #23313d; }
+.assistant-context-track > span { display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #54d9ad, #8fe1ce); transition: width .35s ease, background .25s; }
+.assistant-context-track[data-level="medium"] > span { background: linear-gradient(90deg, #d8c363, #f5d874); }
+.assistant-context-track[data-level="high"] > span { background: linear-gradient(90deg, #e39a55, #f16f73); }
+.assistant-context-panel > p { margin: 0; color: #718694; font-size: 8px; line-height: 1.5; }
+.assistant-context-panel > p[data-storage="full"] { color: #f0b17b; }
 .audio-dock {
   position: fixed;
   z-index: 40;
@@ -209,6 +227,26 @@ dialog select,
 }
 .assistant-body-map-notice a { color: #a8f0d5; text-decoration: none; }
 .assistant-body-map-notice a:hover { color: #e1fff4; text-decoration: underline; }
+
+/* Fluid desktop canvas: scale the navigation and gutters with available space. */
+.app-shell {
+  width: min(100%, 2200px);
+  max-width: 2200px;
+  min-height: 100svh;
+  grid-template-columns: clamp(210px, 15vw, 286px) minmax(0, 1fr);
+}
+.sidebar { height: 100svh; overflow-y: auto; padding-inline: clamp(14px, 1.5vw, 30px); }
+.main-content { max-width: 1680px; padding-inline: clamp(22px, 3.4vw, 76px); }
+.page-hero { padding: clamp(20px, 2.5vw, 42px); }
+.page-hero h1 { font-size: clamp(29px, 3.2vw, 52px); }
+.anatomy-stage { height: clamp(400px, 56vh, 760px); }
+.app-shell.sidebar-collapsed { grid-template-columns: 78px minmax(0, 1fr); }
+
+@media (min-width: 1800px) {
+  .app-shell { grid-template-columns: clamp(270px, 15vw, 320px) minmax(0, 1fr); }
+  .app-shell.sidebar-collapsed { grid-template-columns: 78px minmax(0, 1fr); }
+  .assistant-messages { max-height: min(54vh, 760px); }
+}
 
 .cosmic-sun {
   position: absolute;
@@ -325,6 +363,12 @@ dialog select,
 }
 
 @media (max-width: 720px) {
+  .app-shell { width: 100%; grid-template-columns: minmax(0, 1fr); min-height: 100svh; }
+  .sidebar { height: auto; max-height: none; overflow: visible; padding-inline: 16px; }
+  .main-content { max-width: none; padding-inline: clamp(14px, 4vw, 24px); }
+  .page-hero { padding: 22px 18px; }
+  .anatomy-stage { height: clamp(360px, 62svh, 520px); }
+  .assistant-context-panel { margin-inline: 10px; }
   .main-content { padding-inline: clamp(14px, 4vw, 22px); }
   .topbar { min-height: 58px; height: auto; gap: 10px; }
   .breadcrumb { min-width: 0; gap: 7px; font-size: 8px; }
@@ -354,6 +398,8 @@ dialog select,
 }
 
 @media (max-width: 440px) {
+  .assistant-context-heading { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .assistant-context-heading > strong { text-align: left; }
   .metrics-grid { grid-template-columns: 1fr; }
   .assistant-form-footer { grid-template-columns: minmax(0, 1fr); }
   .assistant-form-footer .button-primary { justify-self: end; }

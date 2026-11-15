@@ -78,6 +78,6 @@ export function mountAudioDock() {
       osc.connect(amp); amp.connect(master); osc.start(now); osc.stop(now + .2);
     });
   }
-  window.ORBITAL_AUDIO = { playCue };
+  window.Valmed_AUDIO = { playCue };
   update();
 }

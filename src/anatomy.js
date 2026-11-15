@@ -1,4 +1,4 @@
-﻿import * as THREE from 'three';
+import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
@@ -94,7 +94,7 @@ export function mountAnatomyViewer(container, { onSelect = () => {} } = {}) {
   let structureIndex = new Map();
   let flaggedOnly = false;
   let currentSex = 'male';
-  let healthMap = window.ORBITAL_HEALTH || {};
+  let healthMap = window.Valmed_HEALTH || {};
   const layerSettings = new Map([...STRUCTURE_GROUPS].map((layer) => [layer, layer !== 'skin']));
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let autoRotateActive = !reducedMotion;
@@ -416,7 +416,7 @@ export function mountAnatomyViewer(container, { onSelect = () => {} } = {}) {
     const explanation = level === 'normal'
       ? 'No linked reading or symptom log currently flags this area.'
       : 'Color reflects an entered reading or a recent, user-confirmed symptom in a related body region.';
-    details.innerHTML = `<span class="anatomy-risk ${level}"><i></i>${stateLabels[level]}</span><strong>${safeLabel}</strong><small>${explanation}${linked.length ? ` Linked indicators: ${linked.join(', ')}.` : ''} Illustrative only; not a diagnosis.</small><a class="anatomy-ask-link" href="assistant.html?structure=${encodeURIComponent(key)}">Ask ORBITAL about this area ↗</a>`;
+    details.innerHTML = `<span class="anatomy-risk ${level}"><i></i>${stateLabels[level]}</span><strong>${safeLabel}</strong><small>${explanation}${linked.length ? ` Linked indicators: ${linked.join(', ')}.` : ''} Illustrative only; not a diagnosis.</small><a class="anatomy-ask-link" href="assistant.html?structure=${encodeURIComponent(key)}">Ask Valmed about this area ↗</a>`;
     if (calloutLayer && calloutCard) {
       calloutLayer.hidden = !selectedAnchorWorld;
       calloutCard.dataset.level = level;
@@ -433,7 +433,7 @@ export function mountAnatomyViewer(container, { onSelect = () => {} } = {}) {
     if (!automatic) stopAutoRotate();
     const part = structureIndex.get(key);
     if (!part?.objects.length) return;
-    if (!automatic) window.ORBITAL_AUDIO?.playCue('select');
+    if (!automatic) window.Valmed_AUDIO?.playCue('select');
     const layer = part.layer;
     if (layer && layerSettings.get(layer) === false) {
       layerSettings.set(layer, true);
@@ -543,10 +543,10 @@ export function mountAnatomyViewer(container, { onSelect = () => {} } = {}) {
     pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
     const hit = raycaster.intersectObject(modelRoot, true)[0];
-    if (hit?.object) { window.ORBITAL_AUDIO?.playCue('select'); showSelection(keyFor(hit.object)); }
+    if (hit?.object) { window.Valmed_AUDIO?.playCue('select'); showSelection(keyFor(hit.object)); }
   });
   container.querySelectorAll('[data-layer]:not(:disabled)').forEach((button) => button.addEventListener('click', () => {
-    window.ORBITAL_AUDIO?.playCue('switch');
+    window.Valmed_AUDIO?.playCue('switch');
     stopAutoRotate();
     const layer = button.dataset.layer;
     button.classList.toggle('active');
@@ -555,7 +555,7 @@ export function mountAnatomyViewer(container, { onSelect = () => {} } = {}) {
     applyLayerVisibility();
   }));
   container.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => {
-    window.ORBITAL_AUDIO?.playCue('switch');
+    window.Valmed_AUDIO?.playCue('switch');
     stopAutoRotate();
     const view = button.dataset.view;
     container.querySelectorAll('[data-view]').forEach((item) => item.classList.toggle('active', item === button));

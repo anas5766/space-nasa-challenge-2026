@@ -1,6 +1,6 @@
-# ORBITAL — Mission Health
+# Valmed — Mission Health
 
-ORBITAL is a multi-page, locally run astronaut wellness prototype inspired by NASA's Human Research Program. It brings crew check-ins, spaceflight hazard context, an interactive anatomy viewer, an Ollama-powered local information assistant, and optional wellness mini-games into one presentation-ready experience.
+Valmed is a multi-page, locally run astronaut wellness prototype inspired by NASA's Human Research Program. It brings crew check-ins, spaceflight hazard context, an interactive anatomy viewer, an Ollama-powered local information assistant, and optional wellness mini-games into one presentation-ready experience.
 
 ## Run locally
 

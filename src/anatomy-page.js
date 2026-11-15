@@ -27,13 +27,13 @@ function refreshAnatomyState() {
     return Number.isFinite(age) && age >= 0 && age < 24 * 60 * 60 * 1000;
   });
   const currentMetricStatuses = Object.fromEntries(currentReadings.map(({ id, status }) => [id, status]));
-  window.ORBITAL_HEALTH = {
+  window.Valmed_HEALTH = {
     ...currentMetricStatuses,
     bodyRegions: snapshot.bodyRegions,
     readings: currentReadings,
     currentSymptoms: snapshot.currentSymptoms,
   };
-  window.dispatchEvent(new CustomEvent('orbital:health-update', { detail: window.ORBITAL_HEALTH }));
+  window.dispatchEvent(new CustomEvent('orbital:health-update', { detail: window.Valmed_HEALTH }));
 }
 
 refreshAnatomyState();

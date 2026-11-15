@@ -353,11 +353,11 @@ $('#crewCheckSave').addEventListener('click', () => {
   const prioritySignal = ['chest', 'breathing', 'fainting', 'confusion', 'weakness', 'rapid-worsening'].includes(kind) || severity >= 8;
   const result = $('#crewCheckResult');
   result.replaceChildren(document.createTextNode(prioritySignal
-    ? 'Priority signal queued for the assistant. Open ORBITAL for local review. For severe symptoms, follow the mission emergency protocol now; do not wait for AI. '
+    ? 'Priority signal queued for the assistant. Open Valmed for local review. For severe symptoms, follow the mission emergency protocol now; do not wait for AI. '
     : 'Check-in saved to the health log. This report is not a diagnosis. '));
   const link = document.createElement('a');
   link.href = 'assistant.html';
-  link.textContent = 'Open ORBITAL ↗';
+  link.textContent = 'Open Valmed ↗';
   result.append(link);
   $('#crewCheckForm').hidden = true;
   saveScore('checkin', 1);

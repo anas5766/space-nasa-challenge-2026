@@ -1,4 +1,4 @@
-const CACHE='valmed-health-assessment-v11';
+const CACHE='valmed-health-assessment-v12';
 const CORE=[
   '/index.html','/health.html','/anatomy.html',
   '/src/styles.css','/src/presentation.css','/src/visual-polish.css','/src/solar-command.css',
@@ -7,7 +7,7 @@ const CORE=[
   '/assets/solar-textures/2k_sun.jpg','/assets/solar-textures/2k_mercury.jpg','/assets/solar-textures/2k_venus_surface.jpg',
   '/assets/solar-textures/2k_earth_daymap.jpg','/assets/solar-textures/2k_earth_clouds.jpg','/assets/solar-textures/2k_moon.jpg','/assets/solar-textures/2k_mars.jpg',
   '/assets/solar-textures/2k_jupiter.jpg','/assets/solar-textures/2k_saturn.jpg','/assets/solar-textures/2k_saturn_ring_alpha.png',
-  '/assets/solar-textures/2k_uranus.jpg','/assets/solar-textures/2k_neptune.jpg','/assets/solar-textures/2k_stars_milky_way.jpg',
+  '/assets/solar-textures/2k_uranus.jpg','/assets/solar-textures/2k_neptune.jpg','/assets/solar-textures/2k_stars_milky_way.jpg','/assets/solar-textures/milky-way-eso.jpg',
   '/src/protocols/protocols.css','/src/health-page.js','/src/anatomy.js','/src/anatomy-health-map.mjs','/src/anatomy-callout.css',
   '/src/data/demo-mission.mjs','/src/data/health-history.mjs','/src/health-state.js','/src/protocols/protocol-ui.js',
   '/src/protocols/protocol-engine.mjs','/src/services/health-risk-engine.mjs','/src/services/validated-thresholds.js','/src/services/health-risk-ui.css'

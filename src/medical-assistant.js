@@ -1,10 +1,10 @@
 import { addSymptomEntry, clearPendingMedicalAlert, readPendingMedicalAlert } from './health-state.js';
-import { evaluateProtocol } from './protocols/protocol-engine.mjs';
+import { EMERGENCY_GUIDANCE, buildNoMedicalSupportResponse, evaluateProtocol, priorityRun, reportsMedicalSupportUnavailable } from './protocols/protocol-engine.mjs';
 
 const SYSTEM_PROMPT = `You are Valmed's local spaceflight health support assistant. Provide useful, specific, calm first-aid information and decision support for an astronaut. You are not a clinician and cannot establish a diagnosis or issue a prescription; do not use this limitation as a reason to refuse ordinary health guidance.
 
 Safety rules:
-- A saved VALMED structured protocol is deterministic, safety-prioritized guidance. Never downgrade, contradict, reinterpret, or replace it. The app bypasses Ollama while a protocol is active; after a documented resolution or flight-surgeon handoff, defer to the mission medical team and checklist.
+- A saved VALMED structured protocol is deterministic, safety-prioritized guidance. Never downgrade, contradict, reinterpret, or replace it. If the user says the recommended medical contact is unavailable, acknowledge that constraint and answer it directly: give practical alternatives using approved primary/backup mission communications, the mission checklist, and another trained crewmate if present. Do not merely repeat “contact the CMO”; do not invent a radio channel, procedure, diagnosis, or medication. Keep the protocol escalation active.
 - Do not present a diagnosis as certain or say that the astronaut is safe based on limited data. When useful, give up to three plausible explanations explicitly labeled as possibilities, with the key uncertainty.
 - Give specific, low-risk first-aid and self-care steps that fit the described symptom, including what to stop doing, what to monitor, and when to reassess. Do not leave the astronaut with only a disclaimer or a generic instruction to contact someone.
 - Medication: do not prescribe, invent a drug/dose, or recommend changing a prescription. You may explain general medication safety and suggest checking the mission-approved formulary/checklist, allergies, interactions, and directions with the CMO/flight surgeon before taking an unfamiliar or non-approved medicine. If a mission-approved medication has already been assigned for this symptom, advise following its onboard instructions exactly.
@@ -43,11 +43,11 @@ function readSavedConversation() {
 function readActiveProtocol() {
   try {
     const runs = JSON.parse(localStorage.getItem('valmed-protocol-runs-v1') || '[]');
-    const latest = Array.isArray(runs) ? runs[0] : null;
+    const latest = priorityRun(runs);
     if (!latest || latest.status === 'handed-off') return null;
     const decision = evaluateProtocol({ symptom: latest.kind, answers: latest.answers || {} });
     if (latest.status === 'resolved' && decision.level !== 'emergency') return null;
-    return { title: decision.protocol.title, ...decision };
+    return { title: decision.protocol.title, symptom: latest.kind, ...decision };
   } catch { return null; }
 }
 
@@ -85,7 +85,7 @@ function explicitlyReportsCurrentRedFlag(question) {
   return current && !hypothetical;
 }
 
-function formatAssistantResponse(value, { currentRedFlag }) {
+function formatAssistantResponse(value, { currentRedFlag, protocolSupportUnavailable = false }) {
   const cleaned = removePrivateReasoning(value);
   try {
     const normalized = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
@@ -114,7 +114,7 @@ function formatAssistantResponse(value, { currentRedFlag }) {
       }
       const sections = [
         ...(!currentRedFlag && result.assessment ? [['Assessment (possibilities, not a diagnosis)', result.assessment]] : []),
-        ...(currentRedFlag ? [['Immediate priority', result.immediatePriority]] : []),
+        ...(currentRedFlag ? [[protocolSupportUnavailable ? 'Protocol remains active · responding to your constraint' : 'Immediate priority', protocolSupportUnavailable ? 'The emergency escalation remains active. The steps below address the fact that medical staff are not currently available.' : result.immediatePriority]] : []),
         ['Next steps', result.nextSteps],
         ...(result.medicationGuidance ? [['Medication safety', result.medicationGuidance]] : []),
         [currentRedFlag ? 'Tell the medical team' : 'When to involve the medical team', result.tellMedicalTeam],
@@ -246,7 +246,7 @@ export function initMedicalAssistant({ getContext }) {
       : /rapidly worsening|getting worse quickly/.test(text) ? 'rapid-worsening'
       : /severe new weakness/.test(text) ? 'weakness'
       : /breath|breathing|short of breath/.test(text) ? 'breathing'
-      : /chest pain|chest pressure|tightness/.test(text) ? 'chest'
+      : /chest pain|chest pressure|dolor (?:intenso )?en el pecho|presi[oó]n en el pecho|tightness/.test(text) ? 'chest'
       : /headache|dizz/.test(text) ? 'headache'
       : /vision|blurry|seeing/.test(text) ? 'vision'
       : /nausea|nauseous|vomit/.test(text) ? 'nausea'
@@ -257,6 +257,11 @@ export function initMedicalAssistant({ getContext }) {
   }
 
   function recordCurrentConversationSymptom(value) {
+    const clauses = String(value).split(/\b(?:but|however|pero)\b/i);
+    if (clauses.length > 1) {
+      if (/\b(?:what if|hypothetically|for example|if someone)\b/i.test(value)) return false;
+      return clauses.map(recordCurrentConversationSymptom).some(Boolean);
+    }
     const text = String(value || '').toLowerCase();
     const symptomCandidate = /pain|ache|pressure|tightness|breath|headache|dizz|vision|nausea|vomit|weak|sore|tingl|unwell|faint|confus|rash|burn|symptom|injur|hurt|wound|fractur|dolor|duele|molestia|lesi[oó]n|herida|golpe|torcedura/.test(text);
     const bodyPart = /head|brain|eye|face|jaw|ear|neck|throat|chest|heart|lung|rib|stomach|abdomen|belly|kidney|back|spine|shoulder|arm|elbow|wrist|hand|finger|hip|leg|knee|ankle|foot|muscle|bone|cabeza|cerebro|ojo|cara|mand[ií]bula|o[ií]do|cuello|garganta|pecho|coraz[oó]n|pulm[oó]n|costilla|est[oó]mago|abdomen|ri[nñ][oó]n|espalda|columna|hombro|brazo|codo|mu[nñ]eca|mano|dedo|cadera|pierna|rodilla|tobillo|pie|m[uú]sculo|hueso/.test(text);
@@ -264,10 +269,8 @@ export function initMedicalAssistant({ getContext }) {
     const negatedOrHypothetical = /\b(?:what if|hypothetically|for example|if someone|if an astronaut|if the patient|i do not have|i don't have|i have no|i am not|i'm not|no symptoms|used to|previously|yesterday|resolved|gone now|no longer|stopped|no tengo|no me duele|no presenta|sin dolor|sin s[ií]ntomas)\b/.test(text);
     if (!symptomCandidate || !bodyPart || !currentReport || negatedOrHypothetical) return false;
     const suggestion = suggestSymptomFromText(value);
-    const severe = /chest pain|chest pressure|difficulty breathing|shortness of breath|faint|passed out|sudden confusion|severe|rapidly worsening|dolor (?:intenso )?en el pecho|presi[oó]n en el pecho|me cuesta respirar|falta de aire|desmay|confusi[oó]n repentina|debilidad intensa|empeorando r[aá]pidamente|grave|muy fuerte/.test(text);
     addSymptomEntry({
       ...suggestion,
-      severity: severe ? Math.max(8, suggestion.severity) : suggestion.severity,
       note: String(value).slice(0, 160),
       at: new Date().toISOString(),
       source: 'assistant-chat',
@@ -397,24 +400,34 @@ export function initMedicalAssistant({ getContext }) {
     const answer = appendMessage('assistant', 'Reviewing the current health context locally…', 'thinking');
     chatHistory.push({ role: 'user', content: question });
     persistConversation();
-      const currentRedFlag = explicitlyReportsCurrentRedFlag(question)
+      let currentRedFlag = explicitlyReportsCurrentRedFlag(question)
         || Boolean(attachedAlertId && queuedAlert?.type === 'priority-symptom');
     busy = true;
     updateControls();
     root.classList.add('is-thinking');
+    let activeProtocol = null;
+    let supportUnavailable = false;
     try {
-      const activeProtocol = readActiveProtocol();
-      if (activeProtocol) {
-        const answerText = `STRUCTURED PROTOCOL PRIORITY — ${activeProtocol.protocol.title}\n\n${activeProtocol.guidance}\n\nOllama was not used for this reply so it cannot contradict the active protocol. Record an action and outcome in Health; mark the flight-surgeon handoff only after the medical team has acknowledged the case.`;
+      activeProtocol = readActiveProtocol();
+      supportUnavailable = Boolean((activeProtocol || currentRedFlag) && reportsMedicalSupportUnavailable(question, chatHistory));
+      currentRedFlag = currentRedFlag || activeProtocol?.level === 'emergency';
+      if ((activeProtocol || currentRedFlag) && !supportUnavailable) {
+        const answerText = currentRedFlag ? EMERGENCY_GUIDANCE : `STRUCTURED PROTOCOL PRIORITY — ${activeProtocol.protocol.title}\n\n${activeProtocol.guidance}\n\nOllama was not used for this reply so it cannot contradict the active protocol. Record an action and outcome in Health; mark the flight-surgeon handoff only after the medical team has acknowledged the case.`;
         answer.classList.remove('thinking');
         answer.querySelector('p').textContent = answerText;
         chatHistory.push({ role: 'assistant', content: answerText });
         persistConversation();
-        if (attachedAlertId) clearPendingMedicalAlert(attachedAlertId);
+        if (attachedAlertId) {
+          clearPendingMedicalAlert(attachedAlertId);
+          if (pendingHealthAlert?.id === attachedAlertId) showHealthAlert(null);
+        }
         return;
       }
       const context = getContext();
-      const systemContent = `${SYSTEM_PROMPT}\n\nCURRENT MESSAGE TRIAGE: ${currentRedFlag ? 'The user explicitly reports a current red-flag symptom. Put the mission emergency instruction first.' : 'No current red-flag symptom was explicitly identified in the latest message. Treat saved symptoms as historical context only and answer the actual question without immediate emergency escalation.'}\n\nCURRENT ASTRONAUT HEALTH CONTEXT (user-entered, unverified; logged symptoms may be historical):\n${context}`;
+      const protocolDirective = activeProtocol
+        ? `\n\nAUTHORITATIVE ACTIVE PROTOCOL: ${activeProtocol.protocol.title}; level ${activeProtocol.level}. Required guidance: ${activeProtocol.guidance}\nThe protocol remains active. Never suggest that the user can ignore, close, or downgrade it. ${supportUnavailable ? 'The user says medical support is unavailable. Respond to that obstacle with practical, approved alternatives; do not just repeat the unavailable contact instruction. Avoid a diagnosis or medication advice.' : ''}`
+        : '';
+      const systemContent = `${SYSTEM_PROMPT}\n\nCURRENT MESSAGE TRIAGE: ${currentRedFlag ? 'An active red-flag protocol or current red-flag report is present. Preserve the emergency escalation.' : 'No current red-flag symptom was explicitly identified in the latest message. Treat saved symptoms as historical context only and answer the actual question without immediate emergency escalation.'}${protocolDirective}\n\nCURRENT ASTRONAUT HEALTH CONTEXT (user-entered, unverified; logged symptoms may be historical):\n${context}`;
       const response = await fetch('/api/ollama/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -445,12 +458,15 @@ export function initMedicalAssistant({ getContext }) {
           ],
           };
         })()),
-        signal: AbortSignal.timeout(180_000),
+        signal: AbortSignal.timeout(supportUnavailable ? 12_000 : 180_000),
       });
       const data = await readApiResponse(response);
       if (!response.ok) throw new Error(data.error || `Ollama returned ${response.status}.`);
-      const answerText = formatAssistantResponse(data.message?.content, { currentRedFlag })
+      let answerText = formatAssistantResponse(data.message?.content, { currentRedFlag, protocolSupportUnavailable: supportUnavailable })
         || 'The local model returned an empty response. Try again or select another model.';
+      if (supportUnavailable && !/backup|checklist|another crew|crewmate|if nobody responds|if no one responds|onboard procedure/i.test(answerText)) {
+        answerText = `${activeProtocol?.protocol.title || 'Emergency support'}\n\n${buildNoMedicalSupportResponse({ protocolTitle: activeProtocol?.protocol.title, symptom: activeProtocol?.symptom, question })}\n\nThe protocol escalation remains active. The model did not provide a concrete alternative, so VALMED is showing its local fallback guidance.`;
+      }
       answer.classList.remove('thinking');
       answer.querySelector('p').textContent = answerText;
       chatHistory.push({ role: 'assistant', content: answerText });
@@ -461,10 +477,14 @@ export function initMedicalAssistant({ getContext }) {
       }
     } catch (error) {
       answer.classList.remove('thinking');
-      answer.classList.add('assistant-error');
-      answer.querySelector('p').textContent = error.name === 'TimeoutError'
-        ? 'The local model took too long to answer. Try a smaller model or shorten the question.'
-        : `Could not get a response from Ollama: ${error.message}`;
+      if (supportUnavailable) {
+        answer.querySelector('p').textContent = `${activeProtocol?.protocol.title || 'Emergency support'}\n\n${buildNoMedicalSupportResponse({ protocolTitle: activeProtocol?.protocol.title, symptom: activeProtocol?.symptom, question })}\n\nThe protocol escalation remains active. This is VALMED's local fallback because Ollama could not answer.`;
+      } else {
+        answer.classList.add('assistant-error');
+        answer.querySelector('p').textContent = error.name === 'TimeoutError'
+          ? 'The local model took too long to answer. Try a smaller model or shorten the question.'
+          : `Could not get a response from Ollama: ${error.message}`;
+      }
       chatHistory.push({ role: 'assistant', content: answer.querySelector('p').textContent });
       persistConversation();
       if (attachedAlertId) activeAlertId = attachedAlertId;

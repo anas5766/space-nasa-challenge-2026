@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const ROOT = __dirname;
-const PORT = Number(process.env.PORT) || 4173;
+const PORT = Number(process.env.PORT ?? 4173);
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -111,7 +111,7 @@ const server = http.createServer((request, response) => {
         response.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' }).end(JSON.stringify({ error: 'Invalid JSON body' }));
         return;
       }
-      if (typeof payload.model !== 'string' || !Array.isArray(payload.messages) || payload.messages.length === 0) {
+      if (!payload || typeof payload.model !== 'string' || !Array.isArray(payload.messages) || payload.messages.length === 0) {
         response.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' }).end(JSON.stringify({ error: 'A model and chat messages are required' }));
         return;
       }
@@ -146,5 +146,5 @@ const server = http.createServer((request, response) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`Valmed is available at http://localhost:${PORT}`);
+  console.log(`Valmed is available at http://localhost:${server.address().port}`);
 });

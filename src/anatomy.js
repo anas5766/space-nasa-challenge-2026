@@ -1,3 +1,4 @@
+import { metricLabel } from './health-state.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -287,7 +288,7 @@ export function mountAnatomyViewer(container, { onSelect = () => {} } = {}) {
       copy.append(name, category);
       const state = document.createElement('span');
       state.className = 'directory-item-state';
-      state.textContent = level === 'normal' ? 'STABLE' : level === 'warning' ? 'ATTENTION' : level === 'moderate' ? 'ALERT' : 'HIGH';
+      state.textContent = metricLabel(level);
       item.append(marker, copy, state);
       fragment.append(item);
     });
@@ -348,18 +349,17 @@ export function mountAnatomyViewer(container, { onSelect = () => {} } = {}) {
     const level = riskFor(key);
     const label = labelFor(key);
     const safeLabel = label.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
-    const stateLabels = { normal: 'STABLE', warning: 'ATTENTION', moderate: 'MODERATE ALERT', critical: 'HIGH ALERT' };
     const linkedSymptoms = symptomsForAnatomyStructure(key, healthMap.currentSymptoms || []);
     const linked = linkedSymptoms.map((item) => `${item.kind} (${item.severity}/10)`);
     const explanation = level === 'normal'
       ? 'No recent user-reported symptom is mapped to this structure.'
       : 'Color reflects a recent user-reported symptom and its selected body area; it does not imply that this structure caused the symptom.';
-    details.innerHTML = `<span class="anatomy-risk ${level}"><i></i>${stateLabels[level]}</span><strong>${safeLabel}</strong><small>${explanation}${linked.length ? ` Reported symptom: ${linked.join(', ')}.` : ''} Mission hazards and general vital-sign trends are not mapped to anatomy. Illustrative only; not a diagnosis.</small><a class="anatomy-ask-link" href="assistant.html?structure=${encodeURIComponent(key)}">Ask Valmed about this area ↗</a>`;
+    details.innerHTML = `<span class="anatomy-risk ${level}"><i></i>${metricLabel(level)}</span><strong>${safeLabel}</strong><small>${explanation}${linked.length ? ` Reported symptom: ${linked.join(', ')}.` : ''} Mission hazards and general vital-sign trends are not mapped to anatomy. Illustrative only; not a diagnosis.</small><a class="anatomy-ask-link" href="assistant.html?structure=${encodeURIComponent(key)}">Ask Valmed about this area ↗</a>`;
     if (calloutLayer && calloutCard) {
       calloutLayer.hidden = !selectedAnchorWorld;
       calloutCard.dataset.level = level;
       calloutStatus?.setAttribute('data-level', level);
-      if (calloutStatus) calloutStatus.textContent = stateLabels[level];
+      if (calloutStatus) calloutStatus.textContent = metricLabel(level);
       if (calloutName) calloutName.textContent = label;
       if (calloutProblem) calloutProblem.textContent = issueFor(key, level);
       updateCalloutPosition();

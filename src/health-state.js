@@ -34,6 +34,8 @@ export function readHealthHistory() {
   return readArray('orbital-history').filter((item) => item && typeof item === 'object');
 }
 
+export const metricLabel = (level) => ({normal:'STABLE', warning:'ATTENTION', moderate:'MODERATE', critical:'CRITICAL'})[level] || 'UNKNOWN';
+
 export function metricStatus(value, low, high) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 'unknown';
@@ -54,7 +56,7 @@ export function readHealthSnapshot() {
     if (stored?.value === null || stored?.value === undefined || stored?.value === '') return [];
     const value = Number(stored?.value);
     if (!Number.isFinite(value)) return [];
-    return [{ ...definition, value, status: metricStatus(value, definition.low, definition.high), recordedAt: stored.at || null }];
+    return [{ ...definition, value, status: 'logged', recordedAt: stored.at || null }];
   });
   const metricStatuses = Object.fromEntries(readings.map(({ id, status }) => [id, status]));
   const allSymptoms = readSymptomLog().filter((symptom) => symptom && typeof symptom === 'object');
@@ -89,33 +91,24 @@ export function readHealthSnapshot() {
 }
 
 function buildMedicalAlert(snapshot) {
-  const now = Date.now();
   const prioritySymptoms = snapshot.currentSymptoms.filter((item) =>
     ['chest', 'breathing', 'fainting', 'confusion', 'weakness', 'rapid-worsening'].includes(item.kind) || Number(item.severity) >= 8,
   );
-  const criticalReadings = snapshot.readings.filter((item) => {
-    const age = now - Date.parse(item.recordedAt || '');
-    return item.status === 'critical' && Number.isFinite(age) && age >= 0 && age < SYMPTOM_WINDOW_MS;
-  });
-  if (!prioritySymptoms.length && !criticalReadings.length) return null;
+  // The dashboard's display ranges are illustrative and cannot trigger medical alerts.
+  if (!prioritySymptoms.length) return null;
 
   const signature = JSON.stringify({
     symptoms: prioritySymptoms.map(({ at, kind, region, severity }) => [at, kind, region, severity]),
-    readings: criticalReadings.map(({ id, value, recordedAt }) => [id, value, recordedAt]),
   });
   const symptomLabel = { chest: 'chest pain or pressure', breathing: 'difficulty breathing', fainting: 'fainting or loss of consciousness', confusion: 'sudden confusion', weakness: 'severe new weakness', 'rapid-worsening': 'rapidly worsening symptoms', headache: 'headache or dizziness', muscle: 'weakness or muscle pain', vision: 'vision changes', nausea: 'nausea', other: 'a reported symptom' };
   const symptomSummary = prioritySymptoms.map((item) => `${symptomLabel[item.kind] || 'a reported symptom'} (${item.region}, intensity ${item.severity}/10)`).join('; ');
-  const readingSummary = criticalReadings.map((item) => `${item.name}: ${item.value} ${item.unit}`).join('; ');
-  const type = prioritySymptoms.length ? 'priority-symptom' : 'critical-measurement';
-  const prompt = prioritySymptoms.length
-    ? `PRIORITY HEALTH ALERT — The astronaut has just confirmed a current symptom: ${symptomSummary}. This was entered in the crew check-in at ${new Date(prioritySymptoms[0].at).toISOString()}. Saved readings for this device: ${readingSummary || 'none currently saved'}. Respond with concise immediate safety guidance, direct the astronaut to the approved mission checklist and CMO/flight surgeon for urgent symptoms, and ask one focused question about onset or worsening. Do not diagnose or prescribe. This app's symptom severity and metric ranges are illustrative only.`
-    : `HEALTH MEASUREMENT REVIEW ALERT — A saved reading was flagged critical by this prototype's illustrative range: ${readingSummary}. This flag is not a validated clinical threshold or a diagnosis. Ask the astronaut to verify the measurement using the mission-approved method, compare with their personal baseline, and report persistent or worsening results through the mission medical channel. Ask whether any symptoms are present. Do not diagnose or prescribe.`;
+  const prompt = `PRIORITY HEALTH ALERT — The astronaut has just confirmed a current symptom: ${symptomSummary}. This was entered in the crew check-in at ${new Date(prioritySymptoms[0].at).toISOString()}. Respond with concise immediate safety guidance, direct the astronaut to the approved mission checklist and available mission medical support. If no clinician is reachable, acknowledge that constraint and help the astronaut follow the approved onboard protocol, check immediate danger, and report via the mission communications procedure. Ask one focused question about onset or worsening. Do not diagnose or prescribe. Dashboard measurement ranges are illustrative only.`;
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    type,
+    type: 'priority-symptom',
     signature,
     createdAt: new Date().toISOString(),
-    summary: prioritySymptoms.length ? `Current symptom: ${symptomSummary}` : `Reading to verify: ${readingSummary}`,
+    summary: `Current symptom: ${symptomSummary}`,
     prompt,
   };
 }
@@ -163,9 +156,15 @@ export function announceHealthStateChange() {
 }
 
 export function saveMetricLog(readings) {
-  const values = readings
+  const previous = new Map(readMetricLog().map((item) => [item.id, item]));
+  const timestamp = new Date().toISOString();
+  for (const reading of readings) {
+    if (!reading || reading.value === null || reading.value === undefined || reading.value === '' || !Number.isFinite(Number(reading.value))) continue;
+    previous.set(reading.id, { id: reading.id, value: Number(reading.value), at: timestamp });
+  }
+  const values = [...previous.values()]
     .filter((reading) => reading && reading.value !== null && reading.value !== undefined && reading.value !== '' && Number.isFinite(Number(reading.value)))
-    .map(({ id, value }) => ({ id, value: Number(value), at: new Date().toISOString() }));
+    .map(({ id, value, at }) => ({ id, value: Number(value), at: at || timestamp }));
   localStorage.setItem('orbital-metrics', JSON.stringify(values));
   announceHealthStateChange();
   return values;

@@ -89,3 +89,111 @@
 .symptom-entry[data-review-state="historical"] > div > small:nth-of-type(2) { color: var(--muted, #9aa8b8); }
 
 .risk-hazard-note { margin: 10px 0 0; color: var(--muted, #9aa8b8); font-size: .78rem; line-height: 1.55; }
+
+/* Health-only controls: keep dialogs and the dynamically-added protocol form
+   aligned with the shared VALMED panel, button, and control palette. */
+#medical-protocols {
+  margin: 26px 0 34px;
+  padding: clamp(18px, 3vw, 28px);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: linear-gradient(145deg, rgba(18,22,36,.95), rgba(15,18,29,.96));
+  box-shadow: none;
+}
+#medical-protocols > h2 { margin: 7px 0 6px; font-size: clamp(1.35rem, 2vw, 1.8rem); letter-spacing: -.035em; }
+#medical-protocols > h3 { margin: 18px 0 10px; font-size: .95rem; }
+#medical-protocols .protocol-intro { color: var(--muted, #9aa8b8); font-size: .82rem; line-height: 1.6; }
+#medical-protocols .protocol-field { gap: 7px; color: #d9e6e9; font-size: .76rem; font-weight: 600; }
+#medical-protocols .protocol-field input,
+#medical-protocols .protocol-field select,
+#medical-protocols .protocol-field textarea {
+  width: 100%; min-width: 0; min-height: 39px; padding: 9px 10px;
+  border: 1px solid var(--line); border-radius: 6px;
+  background-color: rgba(9,13,23,.88); color: #edf8fa;
+  font: .76rem 'Manrope', sans-serif;
+}
+#medical-protocols .protocol-field select {
+  appearance: none; padding-right: 38px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239cefff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center;
+}
+.main-content select.dialog-select,
+#medical-protocols .protocol-question select {
+  appearance: none; padding-right: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239cefff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center;
+}
+#medical-protocols .protocol-field input:focus,
+#medical-protocols .protocol-field select:focus,
+#medical-protocols .protocol-field textarea:focus,
+.reading-dialog .form-grid input:focus,
+.reading-dialog .form-grid select:focus {
+  border-color: rgba(149,237,255,.68);
+  box-shadow: 0 0 0 3px rgba(149,237,255,.09);
+  outline: none;
+}
+#medical-protocols .protocol-question {
+  border-color: var(--line); border-radius: 6px;
+  background: rgba(255,255,255,.025);
+}
+#medical-protocols .protocol-question select {
+  min-height: 36px; padding: 7px 34px 7px 10px;
+  border: 1px solid var(--line); border-radius: 5px;
+  background-color: #0c101a; color: #eafaff;
+}
+#medical-protocols .protocol-result {
+  border-color: rgba(149,237,255,.2); border-radius: 7px;
+  background: rgba(149,237,255,.035);
+}
+#medical-protocols .protocol-result[data-level="urgent"],
+#medical-protocols .protocol-result[data-level="emergency"] {
+  border-color: rgba(224,171,83,.42); background: rgba(224,171,83,.08);
+}
+#medical-protocols .protocol-result[data-level="emergency"] { box-shadow: inset 3px 0 #df6868; }
+#medical-protocols .protocol-result > strong { color: #9cefff; }
+#medical-protocols .protocol-result[data-level="urgent"] > strong { color: #e4bb7b; }
+#medical-protocols .protocol-result[data-level="emergency"] > strong { color: #fb858b; }
+#medical-protocols .protocol-history article {
+  border-color: var(--line); border-radius: 6px; background: rgba(255,255,255,.025);
+}
+#medical-protocols .protocol-history article small { color: var(--muted, #9aa8b8); line-height: 1.55; }
+#medical-protocols .protocol-history [data-resume] {
+  margin-top: 8px; padding: 7px 10px; border: 1px solid #5acbd434; border-radius: 5px;
+  background: #0a1d2b; color: #9fcbd2; font: inherit; font-size: .72rem; cursor: pointer;
+}
+#medical-protocols .protocol-history [data-resume]:hover {
+  border-color: #64e1e278; background: #0b2535; color: #d2ffff;
+}
+#medical-protocols .protocol-disclaimer { color: var(--muted, #9aa8b8); font-size: .75rem; }
+
+.reading-dialog {
+  border-color: rgba(160,239,255,.24);
+  border-radius: 8px;
+  background: linear-gradient(145deg, #111522, #0f121d);
+}
+.reading-dialog .form-grid label { color: #d9e6e9; font-size: 9px; }
+.reading-dialog .form-grid label span { color: var(--muted, #9aa8b8); }
+.reading-dialog .form-grid input:not([type="range"]),
+.reading-dialog .form-grid select {
+  border-color: var(--line); border-radius: 5px;
+  background-color: #0c101a; color: #eafaff;
+}
+.reading-dialog .dialog-actions { gap: 8px; margin-top: 18px; }
+.symptom-chip.selected {
+  border-color: rgba(149,237,255,.48);
+  background: rgba(149,237,255,.09);
+  color: #d9f9ff;
+}
+.symptom-chip.selected i { border-color: #95edff; background: #95edff; box-shadow: 0 0 7px #95edff; }
+.crew-alert button {
+  border-color: #5acbd434; border-radius: 5px;
+  background: #0a1d2b; color: #9fcbd2; transition: .2s ease;
+}
+.crew-alert button:hover { border-color: #64e1e278; background: #0b2535; color: #d2ffff; }
+
+@media (max-width: 700px) {
+  #medical-protocols { padding: 16px; }
+  #medical-protocols .protocol-question { grid-template-columns: 1fr; }
+  #medical-protocols .protocol-question select { width: 100%; }
+  .reading-dialog { max-height: calc(100dvh - 24px); overflow-y: auto; }
+}

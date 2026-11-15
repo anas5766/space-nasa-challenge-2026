@@ -12,7 +12,7 @@ if (sidebar) {
   const current = location.pathname.split('/').pop() || 'index.html';
   sidebar.innerHTML = `
     <div class="sidebar-brand-row"><a class="brand" href="index.html" aria-label="Valmed home"><span class="brand-mark"><span></span><span></span><span></span></span><span>Valmed<small>MISSION HEALTH</small></span></a><button class="sidebar-toggle" type="button" aria-label="Collapse navigation" aria-controls="primary-navigation" aria-expanded="true" title="Collapse navigation">‹</button></div>
-    <div class="mission-chip"><span class="live-dot"></span><div><small>MISSION STATUS</small><strong>IN ORBIT · ACTIVE</strong></div></div>
+    <div class="mission-chip"><span class="live-dot"></span><div><small>WORKSPACE</small><strong>LOCAL PROTOTYPE</strong></div></div>
     <nav class="nav-links" id="primary-navigation" aria-label="Main navigation">${pages.map(([file, icon, title]) => `<a class="nav-link${current === file ? ' active' : ''}" href="${file}" title="${title}"${current === file ? ' aria-current="page"' : ''}><span class="nav-icon">${icon}</span><span class="nav-label">${title}</span><span class="nav-arrow">↗</span></a>`).join('')}</nav>
     <div class="sidebar-bottom"><a class="crew-card" href="health.html"><span class="crew-avatar">AC</span><span><strong>Alex Chen</strong><small>Mission specialist</small></span><span class="crew-online"></span></a><div class="sidebar-foot"><span>Valmed SYSTEMS <i>v1.0</i></span><span>BUILT TO EXPLORE <b>✦</b></span></div></div>`;
 

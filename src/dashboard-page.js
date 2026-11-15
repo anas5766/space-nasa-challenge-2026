@@ -1,4 +1,4 @@
-import { METRIC_DEFINITIONS, announceHealthStateChange, metricStatus, readMetricLog } from './health-state.js';
+import { metricLabel, METRIC_DEFINITIONS, announceHealthStateChange, metricStatus, readMetricLog } from './health-state.js';
 
 announceHealthStateChange();
 
@@ -23,12 +23,11 @@ function renderOverviewMetrics() {
     const percent = Math.max(0, Math.min(100, (value - low) / (high - low) * 100));
     const cardLevel = hasSaved ? level : 'normal';
     const cardTone = level === 'normal' || !hasSaved ? 'cyan' : 'amber';
-    const stateLabel = !hasSaved ? 'EXAMPLE' : okay ? 'STEADY' : level.toUpperCase();
+    const stateLabel = !hasSaved ? 'EXAMPLE' : metricLabel(level);
     return `<a class="metric-card overview-metric ${cardTone} ${cardLevel}" href="health.html"><div class="metric-top"><span class="metric-icon">${icons[id]}</span><span class="metric-state"><i></i>${stateLabel}</span></div><div class="metric-name">${name}</div><div class="metric-number">${fmt(value)} <small>${unit}</small></div><div class="metric-range"><span>ILLUSTRATIVE RANGE</span><b>${low}–${high} ${unit}</b></div><div class="range-track"><span style="width:${percent}%"></span></div><div class="metric-bottom"><span class="metric-caption">${hasSaved ? 'LATEST SAVED VALUE' : 'SAMPLE · NOT SAVED'}</span><span class="trend-pill neutral">VIEW ↗</span></div></a>`;
   }).join('');
-  const progress = hasSaved ? Math.max(30, 100 - attention * 13) : 0;
-  document.getElementById('overviewProgress').textContent = hasSaved ? `${progress}%` : '—';
-  document.getElementById('overviewBar').style.width = `${progress}%`;
+  document.getElementById('overviewProgress').textContent = 'NOT SCORED';
+  document.getElementById('overviewBar').parentElement.hidden = true;
   document.getElementById('overviewStatusTitle').textContent = !hasSaved ? 'Complete a check-in to load real readings.' : attention ? `${attention} signal${attention === 1 ? '' : 's'} to review.` : 'Your saved signals are within illustrative ranges.';
   document.getElementById('overviewStatusDetail').textContent = 'Check-in readings feed the local assistant and the 3D anatomy map. The displayed ranges are illustrative, not clinical thresholds.';
 }

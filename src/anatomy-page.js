@@ -1,4 +1,4 @@
-import { readHealthSnapshot } from './health-state.js';
+import { metricLabel, readHealthSnapshot } from './health-state.js';
 
 function updateVitalsHud(snapshot) {
   const fields = [
@@ -13,7 +13,7 @@ function updateVitalsHud(snapshot) {
     const card = document.getElementById(cardId);
     if (!valueNode || !metaNode || !card) continue;
     valueNode.textContent = reading ? `${Number.isInteger(reading.value) ? reading.value : reading.value.toFixed(1)} ${reading.unit}` : '—';
-    metaNode.textContent = reading ? `${reading.status.toUpperCase()} · SAVED` : 'Awaiting check-in';
+    metaNode.textContent = reading ? `${metricLabel(reading.status)} · SAVED` : 'Awaiting check-in';
     card.dataset.level = reading?.status || 'unknown';
   }
 }

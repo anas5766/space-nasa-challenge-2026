@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateProtocol, PROTOCOLS } from '../src/protocols/protocol-engine.mjs';
+import { buildNoMedicalSupportResponse, evaluateProtocol, PROTOCOLS, reportsMedicalSupportUnavailable } from '../src/protocols/protocol-engine.mjs';
 
 test('all offered protocols have structured follow-up questions', () => {
   for (const [id, protocol] of Object.entries(PROTOCOLS)) {
@@ -34,4 +34,27 @@ test('an uncertain answer is never treated as an all-clear', () => {
 
 test('unknown symptom safely routes to generic protocol', () => {
   assert.equal(evaluateProtocol({ symptom: 'not-a-protocol' }).protocol.title, PROTOCOLS.other.title);
+});
+
+test('recognizes when the astronaut cannot contact medical support', () => {
+  assert.equal(reportsMedicalSupportUnavailable('There is no medical crew, help me'), true);
+  assert.equal(reportsMedicalSupportUnavailable('No puedo contactar con el equipo médico'), true);
+  assert.equal(reportsMedicalSupportUnavailable('The doctor is available now'), false);
+});
+
+test('remembers unavailable medical support across follow-up messages', () => {
+  assert.equal(reportsMedicalSupportUnavailable('I am alone and getting worse', [
+    { role: 'user', content: 'There is no medical crew, help me' },
+  ]), true);
+});
+
+test('support-unavailable reply gives concrete safe actions without replacing escalation', () => {
+  const response = buildNoMedicalSupportResponse({ protocolTitle: 'Chest discomfort', symptom: 'chest' });
+  assert.match(response, /approved primary and backup channels/i);
+  assert.match(response, /mission-approved emergency medical checklist/i);
+  assert.match(response, /Do not guess a medication or dose/i);
+  assert.match(response, /Are you alone/i);
+  const aloneResponse = buildNoMedicalSupportResponse({ protocolTitle: 'Chest discomfort', symptom: 'chest', question: 'I am alone' });
+  assert.match(aloneResponse, /Do not spend time searching/i);
+  assert.match(aloneResponse, /trouble breathing/i);
 });

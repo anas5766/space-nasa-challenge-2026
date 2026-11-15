@@ -27,10 +27,18 @@ The pages are `index.html` (mission overview), `health.html` (readings, trends, 
 
 - Collapsible, responsive navigation shared across all pages; orbital stars, animated planets, and low-motion support.
 - Editable crew health readings with locally stored trends, symptom notes, and a CSV summary.
+- Explainable, deterministic health-signal assessment comparing saved readings with a user-designated personal reference, describing trends, reviewing recent symptoms, and relating findings to the five spaceflight hazards. Missing data remains unknown; no clinical numeric thresholds are bundled.
+- Mission-aware context for Earth, low-Earth-orbit spacecraft, the ISS, deep-space transit, lunar orbit and lunar surface/base. Captures gravity mode, mission duration, radiation dosimetry, cabin atmosphere, particulates / lunar dust, EVA exposure, crew physiology/activity, communications delay, evacuation time and resupply autonomy.
+- Mission-tagged check-ins and personal references prevent Earth, microgravity and lunar measurements from being silently compared as if they were collected in the same environment.
+- Configurable numeric rules are disabled by default and require explicit medical validation, matching units, and a named source. The assessment is not a diagnosis and escalates urgent symptom categories to mission-approved procedures.
 - Interactive summaries of NASA's five human-spaceflight hazards, with direct NASA and Canadian Space Agency resources.
 - Selectable 3D anatomy structures with colors associated with entered readings and symptom regions.
 - Local assistant: a small Node server verifies each selected model against the installed local Ollama model list, rejects cloud models, and proxies requests to Ollama on the same computer. Conversation context stays in page memory for the current session and is not written to browser storage.
 - Optional paced breathing, visual attention, and sequence-recall activities. Scores stay in browser storage.
+
+## Health risk assessment
+
+The deterministic assessment engine is documented in [`docs/health-risk-engine.md`](docs/health-risk-engine.md). The Health page now includes a mission profile and optional telemetry for radiation dose, cabin pressure and O₂/CO₂ partial pressures, temperature, humidity, particulates / lunar dust, EVA time, respiratory rate, HRV, body mass, exercise, fluid intake, sleep quality, isolation, communications delay, evacuation time and resupply autonomy. These are contextual inputs, not automatically graded against generic limits. The selected location and gravity change the hazards and prompts shown, and historical comparisons are kept within matching mission contexts. A personal reference can be set from saved check-in readings on the Health page; it is a user-designated comparison reference, not a clinical baseline. The engine describes deviations and trends without inventing population thresholds. The configurable threshold list in `src/services/validated-thresholds.js` is intentionally empty until an authorized medical team validates mission-specific rules. Run `npm test` to execute the assessment and symptom-protocol tests.
 
 ## Data and safety
 

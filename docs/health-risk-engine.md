@@ -59,10 +59,10 @@ Environmental telemetry and additional physiology fields are stored locally and 
 
 - [NASA Human Spaceflight Hazards](https://www.nasa.gov/hrp/hazards/) describes the five hazard domains: radiation, isolation and confinement, distance from Earth, gravity fields, and hostile / closed environments.
 - [NASA Human Spaceflight Risks](https://www.nasa.gov/hrp/risks/) describes physiological and behavioral risks including vestibular changes, cardiovascular adaptation, decompression sickness, immune response, nutrition, sleep and behavioral health.
-- [NASA-STD-3001 Volume 2, active Version F (2026)](https://standards.nasa.gov/node/237) covers crew health, performance, habitability and environmental health. NASA's [internal atmosphere requirements](https://www.nasa.gov/reference/6-0-natural-and-induced-environments-vol-2/) identify pressure, humidity, temperature, ventilation, airborne particulates, O₂ and CO₂ partial pressures and trace contaminants as an interacting system.
+- NASA's [standards catalog](https://standards.nasa.gov/all-standards) lists NASA-STD-3001 updates; consult the live catalog for the applicable version. Volume 2 covers crew health, performance, habitability and environmental health. NASA's [atmosphere reference](https://www.nasa.gov/reference/6-0-natural-and-induced-environments-vol-2/) identifies pressure, humidity, temperature, ventilation, airborne particulates, O₂ and CO₂ partial pressures and trace contaminants as an interacting system.
 - [NASA Celestial Dust Risk](https://www.nasa.gov/directorates/esdmd/hhp/risk-of-adverse-health-performance-effects-of-celestial-dust-exposure/) describes potential respiratory, cardiopulmonary, ocular and dermal effects of lunar / celestial dust.
 
-The fields in VALMED are selected as a practical prototype subset of these domains; they do not implement NASA-STD-3001 or replace its mission-tailored requirements.
+The fields in VALMED are a prototype subset motivated by these research domains; they do not implement NASA-STD-3001, encode its requirements, or replace mission-tailored medical/engineering procedures. The synthetic scenario is hand-authored for demonstration and is not sourced telemetry or a validated model.
 
 ## Hazard context
 
@@ -76,6 +76,10 @@ The engine links selected measurements and symptom categories to the five NASA h
 - The tool never recommends medication, diagnoses a condition, or delays escalation for additional measurements.
 - Follow mission-approved checklists and medical direction.
 
+## Offline behavior and evidence retrieval
+
+The service worker precaches the Health/Anatomy pages and first-party deterministic assessment/protocol modules. This requires one successful online visit before the shell is available offline. The 3D viewer depends on third-party model/Three.js assets and is not guaranteed offline. Ollama must be installed and running locally; protocol logic does not depend on it. A small static retrieval module links relevant assistant questions to curated NASA/CSA source pages. It is keyword retrieval over locally bundled summaries, not a live literature search, source parser, clinical knowledge base, or proof that an answer is correct.
+
 ## Tests
 
-Run `npm test`. The Node test suite covers stable baseline comparisons, deviations and trends, missing data, urgent symptoms, threshold provenance, and stale symptoms, as well as the existing symptom protocol tests.
+Run `npm test` for unit and local HTTP/API regression coverage, `npm run test:browser` for the Playwright browser flow, or `npm run test:all` for both. Browser coverage mocks Ollama and verifies interface integration; it does not measure actual model quality or validate clinical safety. CI configuration is in `.github/workflows/ci.yml`.

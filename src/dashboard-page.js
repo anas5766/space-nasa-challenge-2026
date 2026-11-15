@@ -1,4 +1,4 @@
-import { metricLabel, METRIC_DEFINITIONS, announceHealthStateChange, metricStatus, readMetricLog } from './health-state.js';
+import { metricLabel, METRIC_DEFINITIONS, announceHealthStateChange, readHealthSnapshot } from './health-state.js';
 
 announceHealthStateChange();
 
@@ -11,29 +11,26 @@ today.textContent = new Date().toLocaleDateString('en-US', { weekday: 'short', m
 const fmt = (value) => Number.isInteger(value) ? `${value}` : Number(value).toFixed(1);
 
 function renderOverviewMetrics() {
-  const stored = readMetricLog();
-  const saved = Object.fromEntries(stored.map(({ id, value }) => [id, Number(value)]));
-  const hasSaved = stored.length > 0;
-  let attention = 0;
-  document.getElementById('overviewMetrics').innerHTML = metrics.map(({ id, name, unit, low, high }) => {
-    const value = saved[id] ?? defaults[id];
-    const level = hasSaved ? metricStatus(value, low, high) : 'unknown';
-    const okay = level === 'normal';
-    if (hasSaved && !okay) attention += 1;
-    const percent = Math.max(0, Math.min(100, (value - low) / (high - low) * 100));
-    const cardLevel = hasSaved ? level : 'normal';
-    const cardTone = level === 'normal' || !hasSaved ? 'cyan' : 'amber';
-    const stateLabel = !hasSaved ? 'EXAMPLE' : metricLabel(level);
-    return `<a class="metric-card overview-metric ${cardTone} ${cardLevel}" href="health.html"><div class="metric-top"><span class="metric-icon">${icons[id]}</span><span class="metric-state"><i></i>${stateLabel}</span></div><div class="metric-name">${name}</div><div class="metric-number">${fmt(value)} <small>${unit}</small></div><div class="metric-range"><span>ILLUSTRATIVE RANGE</span><b>${low}–${high} ${unit}</b></div><div class="range-track"><span style="width:${percent}%"></span></div><div class="metric-bottom"><span class="metric-caption">${hasSaved ? 'LATEST SAVED VALUE' : 'SAMPLE · NOT SAVED'}</span><span class="trend-pill neutral">VIEW ↗</span></div></a>`;
+  const snapshot = readHealthSnapshot();
+  const assessment = snapshot.assessment;
+  const metricFindings = new Map(assessment.findings.filter((finding) => finding.type === 'measurement').map((finding) => [finding.metricId, finding]));
+  document.getElementById('overviewMetrics').innerHTML = metrics.map(({ id, name, unit }) => {
+    const reading = snapshot.readings.find((item) => item.id === id);
+    const finding = metricFindings.get(id);
+    const value = reading?.value;
+    const level = finding?.state || 'unknown';
+    const displayLevel = ['attention', 'urgent'].includes(level) ? level : 'normal';
+    const source = reading?.status === 'synthetic' ? 'SYNTHETIC · DEMO ONLY' : reading?.status === 'context-mismatch' ? 'OTHER MISSION · EXCLUDED' : reading?.status === 'stale' ? 'STALE · NOT CURRENT' : reading?.status === 'logged' ? `RECORDED ${reading.recordedAt ? new Date(reading.recordedAt).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' }) : ''}` : 'NOT RECORDED';
+    return `<a class="metric-card overview-metric ${displayLevel === 'attention' ? 'amber' : 'cyan'} ${displayLevel}" href="health.html"><div class="metric-top"><span class="metric-icon">${icons[id]}</span><span class="metric-state"><i></i>${reading?.status === 'unknown' ? 'NOT RECORDED' : reading?.status === 'synthetic' ? 'DEMO DATA' : reading?.status === 'stale' ? 'STALE' : reading?.status === 'context-mismatch' ? 'OTHER MISSION' : metricLabel(level)}</span></div><div class="metric-name">${name}</div><div class="metric-number">${value === null || value === undefined ? '—' : fmt(value)} <small>${unit}</small></div><div class="metric-range"><span>PERSONAL TREND · NO CLINICAL CUTOFF</span></div><div class="metric-bottom"><span class="metric-caption">${source}</span><span class="trend-pill neutral">VIEW ↗</span></div></a>`;
   }).join('');
-  document.getElementById('overviewProgress').textContent = 'NOT SCORED';
+  document.getElementById('overviewProgress').textContent = 'NOT A SCORE';
   document.getElementById('overviewBar').parentElement.hidden = true;
-  document.getElementById('overviewStatusTitle').textContent = !hasSaved ? 'Complete a check-in to load real readings.' : attention ? `${attention} signal${attention === 1 ? '' : 's'} to review.` : 'Your saved signals are within illustrative ranges.';
-  document.getElementById('overviewStatusDetail').textContent = 'Check-in readings feed the local assistant and the 3D anatomy map. The displayed ranges are illustrative, not clinical thresholds.';
+  document.getElementById('overviewStatusTitle').textContent = assessment.overallState === 'urgent' ? 'Urgent protocol escalation is active.' : assessment.overallState === 'attention' ? 'Review the changes listed below.' : assessment.overallState === 'normal' ? 'No change signal in available comparisons.' : 'Insufficient current, comparable data.';
+  document.getElementById('overviewStatusDetail').textContent = `${assessment.summary} This is not medical clearance; synthetic, stale, mismatched, and missing records are labeled separately.`;
 }
 
 window.addEventListener('storage', (event) => {
-  if (event.key === 'orbital-metrics' || event.key === null) renderOverviewMetrics();
+  if (['orbital-metrics', 'orbital-history', 'orbital-symptoms', 'valmed-personal-reference-v1', 'valmed-mission-context-v1', 'valmed-demo-mission-150d-active'].includes(event.key) || event.key === null) renderOverviewMetrics();
 });
 renderOverviewMetrics();
 

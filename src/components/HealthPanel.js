@@ -1,22 +1,21 @@
 export function renderHealthPanel({ title, metrics }) {
   const panel = document.createElement('section');
   panel.className = 'panel';
-
-  panel.innerHTML = `
-    <h2>${title}</h2>
-    <ul class="info-list">
-      ${metrics
-        .map(
-          (metric) => `
-            <li>
-              <span>${metric.name}</span>
-              <strong>${metric.healthyRange[0]}-${metric.healthyRange[1]} ${metric.unit}</strong>
-            </li>
-          `
-        )
-        .join('')}
-    </ul>
-  `;
-
+  const heading = document.createElement('h2');
+  heading.textContent = title;
+  const list = document.createElement('ul');
+  list.className = 'info-list';
+  for (const metric of metrics) {
+    const row = document.createElement('li');
+    const label = document.createElement('span');
+    const value = document.createElement('strong');
+    label.textContent = metric.name;
+    value.textContent = metric.value === null || metric.value === undefined
+      ? 'NOT RECORDED'
+      : `${metric.value} ${metric.unit} · ${metric.status || 'UNKNOWN'}`;
+    row.append(label, value);
+    list.append(row);
+  }
+  panel.append(heading, list);
   document.querySelector('.dashboard')?.appendChild(panel);
 }

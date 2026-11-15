@@ -83,7 +83,11 @@ Test-Path .\package.json
 npm start
 ```
 
-This repository does not require `npm install`: it has no third-party npm dependencies. The server uses Node.js built-in modules.
+Install the project dependencies first (Playwright is used for browser QA):
+
+```powershell
+npm install
+```
 
 Open the site in a browser:
 
@@ -103,6 +107,18 @@ Open **Local AI Support** in the web app. The model selector should list `qwen3:
 4. Return to the assistant page and press its refresh button.
 
 The web server uses port `4173`; Ollama uses port `11434`. The 3D anatomy viewer loads its model and Three.js modules from public CDNs, so it also needs internet access.
+
+## 6. Run project tests
+
+The unit/API tests run with Node. Browser tests require Playwright's Chromium download (once per machine):
+
+```powershell
+npm test
+npx playwright install chromium
+npm run test:browser
+```
+
+Or run both test suites after installing Chromium with `npm run test:all`.
 
 ## Troubleshooting
 
@@ -131,4 +147,4 @@ Then open `http://localhost:4174`.
 
 ## Prototype notice
 
-Valmed is an educational hackathon prototype, not a medical device. Its measurements and color ranges are illustrative and must not replace mission medical procedures or advice from the crew medical team.
+Valmed is an educational hackathon prototype, not a medical device. Missing data stays unknown; the app does not provide clinical thresholds or clearance. Follow mission-approved medical procedures and advice from the crew medical team.

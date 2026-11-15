@@ -1,5 +1,6 @@
 import { addSymptomEntry, clearPendingMedicalAlert, readPendingMedicalAlert } from './health-state.js';
 import { EMERGENCY_GUIDANCE, buildNoMedicalSupportResponse, evaluateProtocol, priorityRun, reportsMedicalSupportUnavailable } from './protocols/protocol-engine.mjs';
+import { selectSpaceflightEvidence } from './data/spaceflight-evidence.mjs';
 
 const SYSTEM_PROMPT = `You are Valmed's local spaceflight health support assistant. Provide useful, specific, calm first-aid information and decision support for an astronaut. You are not a clinician and cannot establish a diagnosis or issue a prescription; do not use this limitation as a reason to refuse ordinary health guidance.
 
@@ -85,7 +86,7 @@ function explicitlyReportsCurrentRedFlag(question) {
   return current && !hypothetical;
 }
 
-function formatAssistantResponse(value, { currentRedFlag, protocolSupportUnavailable = false }) {
+function formatAssistantResponse(value, { currentRedFlag, protocolSupportUnavailable = false, evidence = [] }) {
   const cleaned = removePrivateReasoning(value);
   try {
     const normalized = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
@@ -120,11 +121,12 @@ function formatAssistantResponse(value, { currentRedFlag, protocolSupportUnavail
         [currentRedFlag ? 'Tell the medical team' : 'When to involve the medical team', result.tellMedicalTeam],
         ...(result.followUp ? [['Check next', result.followUp]] : []),
         ['Limits', result.limits],
+        ...(evidence.length ? [['Related official references · context only', evidence.map((source) => `${source.organization}: ${source.title} — ${source.url}`).join('\n')]] : []),
       ].filter(([, text]) => typeof text === 'string' && text.trim());
       return sections.map(([heading, text]) => `${heading}\n${text.trim()}`).join('\n\n');
     }
   } catch { /* Older/local models may ignore structured output. */ }
-  if (cleaned.length > 30) return cleaned;
+  if (cleaned.length > 30) return `${cleaned}${evidence.length ? `\n\nRelated official references · context only\n${evidence.map((source) => `${source.organization}: ${source.title} — ${source.url}`).join('\n')}` : ''}`;
   return 'The local model returned an empty or unreadable response. Refresh the model list or try another installed local model.';
 }
 
@@ -424,10 +426,12 @@ export function initMedicalAssistant({ getContext }) {
         return;
       }
       const context = getContext();
+      const evidence = selectSpaceflightEvidence(question, 3);
+      const evidenceContext = evidence.length ? `\n\nCURATED OFFICIAL SPACEFLIGHT CONTEXT (local static summaries; not treatment protocols):\n${evidence.map((source) => `[${source.organization} · ${source.title}] ${source.note} Reference: ${source.url}`).join('\n')}` : '';
       const protocolDirective = activeProtocol
         ? `\n\nAUTHORITATIVE ACTIVE PROTOCOL: ${activeProtocol.protocol.title}; level ${activeProtocol.level}. Required guidance: ${activeProtocol.guidance}\nThe protocol remains active. Never suggest that the user can ignore, close, or downgrade it. ${supportUnavailable ? 'The user says medical support is unavailable. Respond to that obstacle with practical, approved alternatives; do not just repeat the unavailable contact instruction. Avoid a diagnosis or medication advice.' : ''}`
         : '';
-      const systemContent = `${SYSTEM_PROMPT}\n\nCURRENT MESSAGE TRIAGE: ${currentRedFlag ? 'An active red-flag protocol or current red-flag report is present. Preserve the emergency escalation.' : 'No current red-flag symptom was explicitly identified in the latest message. Treat saved symptoms as historical context only and answer the actual question without immediate emergency escalation.'}${protocolDirective}\n\nCURRENT ASTRONAUT HEALTH CONTEXT (user-entered, unverified; logged symptoms may be historical):\n${context}`;
+      const systemContent = `${SYSTEM_PROMPT}\n\nCURRENT MESSAGE TRIAGE: ${currentRedFlag ? 'An active red-flag protocol or current red-flag report is present. Preserve the emergency escalation.' : 'No current red-flag symptom was explicitly identified in the latest message. Treat saved symptoms as historical context only and answer the actual question without immediate emergency escalation.'}${protocolDirective}\n\nCURRENT ASTRONAUT HEALTH CONTEXT (user-entered, unverified; logged symptoms may be historical):\n${context}${evidenceContext}`;
       const response = await fetch('/api/ollama/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -462,7 +466,7 @@ export function initMedicalAssistant({ getContext }) {
       });
       const data = await readApiResponse(response);
       if (!response.ok) throw new Error(data.error || `Ollama returned ${response.status}.`);
-      let answerText = formatAssistantResponse(data.message?.content, { currentRedFlag, protocolSupportUnavailable: supportUnavailable })
+      let answerText = formatAssistantResponse(data.message?.content, { currentRedFlag, protocolSupportUnavailable: supportUnavailable, evidence })
         || 'The local model returned an empty response. Try again or select another model.';
       if (supportUnavailable && !/backup|checklist|another crew|crewmate|if nobody responds|if no one responds|onboard procedure/i.test(answerText)) {
         answerText = `${activeProtocol?.protocol.title || 'Emergency support'}\n\n${buildNoMedicalSupportResponse({ protocolTitle: activeProtocol?.protocol.title, symptom: activeProtocol?.symptom, question })}\n\nThe protocol escalation remains active. The model did not provide a concrete alternative, so VALMED is showing its local fallback guidance.`;

@@ -1,60 +1,79 @@
-# Valmed — Mission Health
+# VALMED — Astronaut Health Support Prototype
 
-Valmed is a multi-page, locally run astronaut wellness prototype inspired by NASA's Human Research Program. It brings crew check-ins, spaceflight hazard context, an interactive anatomy viewer, an Ollama-powered local information assistant, and optional wellness mini-games into one presentation-ready experience.
+VALMED is a local, multi-page hackathon prototype for recording crew-reported health indicators, reviewing structured symptom protocols, and exploring NASA human-spaceflight hazard context. It is an educational demonstrator, not a medical device, diagnostic system, or substitute for mission-approved medical procedures.
 
-## Run locally
+## Quick start
 
-Requirements: Node.js and Ollama. No npm packages are required.
+Requirements: Node.js 20+ and npm. Ollama is optional; only the local assistant needs it.
 
-1. Start Ollama. The assistant uses the Ollama service at `http://127.0.0.1:11434`.
-2. Install a local model if one is not already available:
+```powershell
+npm install
+npm start
+```
 
-   ```bash
-   ollama pull qwen3:4b
-   ```
+Open <http://localhost:4173>. To enable local assistant responses, install and start Ollama, then pull a model, for example:
 
-3. In the project directory, run:
+```powershell
+ollama pull qwen3:4b
+```
 
-   ```bash
-   npm start
-   ```
+Choose the exact installed model name in the assistant. The Node server only accepts a model listed by the Ollama service on `127.0.0.1:11434`; it rejects cloud-named models and never calls a hosted inference API. If Ollama is unavailable, the deterministic protocol guidance remains available.
 
-4. Open [http://localhost:4173](http://localhost:4173).
+## Pages
 
-The pages are `index.html` (mission overview), `health.html` (readings, trends, symptoms and export), `hazards.html` (NASA/CSA research context), `anatomy.html` (interactive 3D model), `assistant.html` (local Ollama chat), and `training.html` (three optional mini-games).
+- `index.html` — mission overview
+- `health.html` — partial check-ins, local history, explainable signal review, symptom log, structured protocols, report and CSV export
+- `hazards.html` — five NASA human-spaceflight hazard domains with attributed source links
+- `anatomy.html` — symptom-linked 3D anatomy viewer
+- `assistant.html` — optional local Ollama assistant; deterministic protocol guidance has priority
+- `training.html` — optional wellness and cognitive activities
 
-## Features
+## Architecture and data flow
 
-- Collapsible, responsive navigation shared across all pages; orbital stars, animated planets, and low-motion support.
-- Editable crew health readings with locally stored trends, symptom notes, and a CSV summary.
-- Explainable, deterministic health-signal assessment comparing saved readings with a user-designated personal reference, describing trends, reviewing recent symptoms, and relating findings to the five spaceflight hazards. Missing data remains unknown; no clinical numeric thresholds are bundled.
-- Mission-aware context for Earth, low-Earth-orbit spacecraft, the ISS, deep-space transit, lunar orbit and lunar surface/base. Captures gravity mode, mission duration, radiation dosimetry, cabin atmosphere, particulates / lunar dust, EVA exposure, crew physiology/activity, communications delay, evacuation time and resupply autonomy.
-- Mission-tagged check-ins and personal references prevent Earth, microgravity and lunar measurements from being silently compared as if they were collected in the same environment.
-- Configurable numeric rules are disabled by default and require explicit medical validation, matching units, and a named source. The assessment is not a diagnosis and escalates urgent symptom categories to mission-approved procedures.
-- Interactive summaries of NASA's five human-spaceflight hazards, with direct NASA and Canadian Space Agency resources.
-- Selectable 3D anatomy structures with colors driven only by recent, user-reported symptoms that match both the selected body area and the anatomical structure. Mission hazards and broad vital-sign trends do not create body-map alerts.
-- Local assistant: a small Node server verifies each selected model against the installed local Ollama model list, rejects cloud models, and proxies requests to Ollama on the same computer. Conversation history is saved in this browser’s localStorage and survives reloads. Use Clear in the assistant to erase it.
-- Optional paced breathing, visual attention, and sequence-recall activities. Scores stay in browser storage.
+This is a static multi-page frontend (HTML, CSS, and native JavaScript modules) served by a small Node.js loopback server. `src/health-state.js` reads and writes the shared browser records and calls the single deterministic engine in `src/services/health-risk-engine.mjs`. Health, Overview, and Anatomy read the same snapshot. Structured symptom protocols live in `src/protocols/`; the assistant adds optional local Ollama text but cannot override those protocol outcomes. `src/data/spaceflight-evidence.mjs` provides offline keyword retrieval over attributed NASA/CSA summaries. The service worker caches first-party Health/protocol resources; external 3D model libraries remain external dependencies.
 
-## Health risk assessment
+Flow: **check-in + symptom → local storage → shared snapshot / deterministic review → chart, body-map, protocol → optional Ollama context → crew report/CSV**. The synthetic 150-day scenario is loaded automatically in a fresh browser profile; on the Health page, **Switch to crew record** removes only tagged synthetic rows and leaves the crew record blank. Reloading or using the demo reset in the browser is enough to start the demonstration again.
 
-The deterministic assessment engine is documented in [`docs/health-risk-engine.md`](docs/health-risk-engine.md). The Health page now includes a mission profile and optional telemetry for radiation dose, cabin pressure and O₂/CO₂ partial pressures, temperature, humidity, particulates / lunar dust, EVA time, respiratory rate, HRV, body mass, exercise, fluid intake, sleep quality, isolation, communications delay, evacuation time and resupply autonomy. These are contextual inputs, not automatically graded against generic limits. The selected location and gravity change the mission hazard domains and prompts shown; these five domains are contextual monitoring priorities, not diagnoses or proof that a symptom was caused by a hazard. Historical comparisons are kept within matching mission contexts. A personal reference can be set from saved check-in readings on the Health page; it is a user-designated comparison reference, not a clinical baseline. The engine describes deviations and trends without inventing population thresholds. The configurable threshold list in `src/services/validated-thresholds.js` is intentionally empty until an authorized medical team validates mission-specific rules. The 3D body map is symptom-only: muscle soreness highlights matching muscle structures rather than every bone in a limb; nausea is mapped to gastrointestinal structures only when the abdomen is selected; systemic reports such as fainting or confusion are not pinned to an arbitrary organ. Symptoms with intensity 0 are excluded from non-urgent findings, while urgent symptom categories still escalate. Older symptom entries remain visible but are labelled as outside the current 24-hour assessment window. Run `npm test` to execute the assessment, anatomy-mapping, history-chart and symptom-protocol tests.
+## Guided 3-minute demonstration
 
-## Data and safety
+1. **0:00–0:30 · Overview:** show the lunar mission context and clarify that the populated mission is synthetic, not a real astronaut record.
+2. **0:30–1:10 · Health:** inspect the annotated 150-day trend and an event; point out source labels and explain that deviations invite review without numeric clinical cutoffs.
+3. **1:10–1:40 · Crew workflow:** select **Switch to crew record**, log a partial measurement and one symptom, then view the shared explainable assessment and prepare a report.
+4. **1:40–2:10 · Anatomy:** show how a localized symptom maps to related anatomy; emphasize that only the reported symptom/area is mapped, not a diagnosis or hazard-caused injury.
+5. **2:10–2:40 · Protocol + local assistant:** use a structured red-flag protocol to show deterministic escalation. Ask the optional local assistant a separate question; explain that fixed protocol content remains authoritative.
+6. **2:40–3:00 · Hazards + close:** open NASA hazard sources, explain mission context versus causal evidence, and finish on the prototype's medical and privacy limitations.
 
-Health readings and symptom notes are stored in this browser's `localStorage`. Ollama prompts and health context go to the local Ollama service through the Node server; they are not sent to a hosted AI service by this app. Conversation history is saved in this browser’s localStorage and survives reloads. Use Clear in the assistant to erase it. The anatomy model and Three.js modules are loaded from public CDNs, so the 3D viewer needs an internet connection.
+## Data and interpretation
 
-This is an educational hackathon prototype, not a medical device or clinical decision system. The dashboard ranges are illustrative and not personalized clinical thresholds. The local model can make mistakes; it cannot diagnose, prescribe, or replace a Crew Medical Officer, flight surgeon, approved mission checklist, or other mission-specific medical direction. New, severe, or worsening symptoms should be shared with the crew medical team using the mission's approved procedures.
+Health records are stored in browser `localStorage` on the current device/profile. A blank value means **not recorded**. Synthetic demonstration values carry an explicit source tag and are excluded from a crew record when the user switches to crew mode. Readings from another mission context and stale readings remain labeled and are not included as current measurements. The signal engine compares available observations with a user-selected reference or prior entries; it has no generic clinical cutoffs. A “no review signal” result is not medical clearance.
 
-## Research resources
+The bundled 150-day lunar series is hand-authored synthetic demonstration data. Its gradual changes and annotated mission events illustrate longitudinal charts and changing context; they are not real astronaut telemetry, an epidemiological model, validated medical evidence, or proof that a hazard caused a health change. The app's curated NASA/CSA source notes are explanatory summaries, not machine-readable medical guidance.
 
-- [NASA: Five Hazards of Human Spaceflight](https://www.nasa.gov/hrp/hazards/)
-- [NASA: Risks of Human Spaceflight](https://www.nasa.gov/hrp/risks/)
-- [NASA: Ongoing HRP Research in Space](https://www.nasa.gov/hrp/ongoing-hrp-research/)
-- [CSA: Monitoring Radiation for Astronaut Health](https://www.asc-csa.gc.ca/eng/news/articles/2026/2026-02-26-monitoring-radiation-astronaut-health.asp)
-- [CSA: Why Do We Conduct Science Experiments in Space?](https://www.asc-csa.gc.ca/eng/iss/science/why-do-we-conduct-science-experiments-in-space.asp)
-- [NASA: In-flight medical care](https://www.nasa.gov/ochmo/health-and-medical-systems/in-flight-medical-care/)
+Structured symptom protocols use deterministic questions and fixed escalation language. The language model cannot override protocol results, diagnose, or prescribe. For urgent symptoms, follow the mission-approved checklist and use the communications procedure for available medical support. The prototype does not contain the actual mission checklist or crew-approved treatment plans.
+
+## Offline and privacy
+
+The service worker caches the Health and Anatomy shells and their first-party assessment dependencies after a successful online load. Check-ins, deterministic review, and structured protocols are designed to continue offline after the cache is populated. The 3D anatomy viewer uses third-party Three.js/model assets and may not render offline. Ollama inference is local to the same computer, but it still receives the conversation and selected health context; chat history is stored locally until cleared. No user accounts, encryption-at-rest, multi-crew separation, backup, or secure deletion are implemented. Do not enter real protected health information.
+
+The Node server binds to loopback, serves an allowlisted set of public files, blocks dotfiles and server-source access, checks browser origins for API requests, validates request sizes/context settings, and proxies only to local Ollama. This is a development prototype, not a hardened operational deployment.
+
+## Verification
+
+```powershell
+npm test
+npx playwright install chromium
+npm run test:browser
+npm run test:all
+```
+
+The unit suite exercises the assessment engine, missing/stale/synthetic data, protocol escalation, body mapping, demo-series shape, and server guards. The browser suite uses a mocked Ollama endpoint and checks page rendering, responsive overflow, partial check-in, local persistence, reports, and assistant request flow. It does not validate clinical safety, real Ollama model quality, a real spacecraft network, or the 3D viewer's clinical accuracy.
+
+## Scientific context
+
+NASA's HRP describes five hazard domains: radiation, isolation and confinement, distance from Earth, altered gravity, and hostile/closed environments. These are context for monitoring and research; they are not diagnoses. Read [NASA's hazards overview](https://www.nasa.gov/hrp/hazards/), [NASA's human-spaceflight risks](https://www.nasa.gov/hrp/risks/), and [NASA in-flight medical care](https://www.nasa.gov/ochmo/health-and-medical-systems/in-flight-medical-care/). Radiation context is also informed by the [Canadian Space Agency overview](https://www.asc-csa.gc.ca/eng/astronauts/space-medicine/radiation.asp). VALMED does not implement NASA-STD-3001 or any mission-specific medical standard.
+
+More engine assumptions and limitations are in [`docs/health-risk-engine.md`](docs/health-risk-engine.md); scope and remaining work are in [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Credits
 
-3D anatomy model: [open-anatomy-3d](https://github.com/MervinR07/open-anatomy-3d), with attribution displayed in the anatomy page. Local language model: [Qwen3 on Ollama](https://ollama.com/library/qwen3). See the source project for its model and data licenses.
+3D anatomy model: [open-anatomy-3d](https://github.com/MervinR07/open-anatomy-3d); attribution appears in the anatomy page. Local model example: [Qwen3 on Ollama](https://ollama.com/library/qwen3). Review each asset/model license before redistribution.

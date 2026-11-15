@@ -4,6 +4,7 @@ const path = require('node:path');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT ?? 4173);
+const PUBLIC_PAGES = new Set(['index.html', 'health.html', 'hazards.html', 'anatomy.html', 'assistant.html', 'training.html', 'service-worker.js']);
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -41,6 +42,35 @@ function proxyToOllama(request, response, apiPath, body = null) {
   });
   if (payload) upstream.end(payload);
   else upstream.end();
+}
+
+function sendJson(response, status, body) {
+  response.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+    'Cross-Origin-Resource-Policy': 'same-origin',
+  });
+  response.end(JSON.stringify(body));
+}
+
+function originAllowed(request) {
+  if (!request.headers.origin) return true;
+  try {
+    const origin = new URL(request.headers.origin);
+    const port = server.address()?.port;
+    return origin.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(origin.hostname) && Number(origin.port || 80) === port;
+  } catch { return false; }
+}
+
+function validChatPayload(payload) {
+  if (!payload || typeof payload.model !== 'string' || payload.model.length > 128 || !Array.isArray(payload.messages) || payload.messages.length < 1 || payload.messages.length > 40) return false;
+  if (!payload.messages.every((message) => message && ['system', 'user', 'assistant'].includes(message.role) && typeof message.content === 'string' && message.content.length <= 20_000)) return false;
+  const options = payload.options || {};
+  return options && typeof options === 'object'
+    && (options.num_ctx === undefined || (Number.isInteger(options.num_ctx) && options.num_ctx >= 256 && options.num_ctx <= 8192))
+    && (options.num_predict === undefined || (Number.isInteger(options.num_predict) && options.num_predict >= 1 && options.num_predict <= 1024))
+    && (options.temperature === undefined || (Number.isFinite(options.temperature) && options.temperature >= 0 && options.temperature <= 1));
 }
 
 function chatWithInstalledLocalModel(request, response, payload) {
@@ -90,6 +120,11 @@ const server = http.createServer((request, response) => {
     return;
   }
 
+  if (pathname.startsWith('/api/') && !originAllowed(request)) {
+    sendJson(response, 403, { error: 'Cross-origin requests are not allowed.' });
+    return;
+  }
+
   if (pathname === '/api/ollama/models' && request.method === 'GET') {
     proxyToOllama(request, response, '/api/tags');
     return;
@@ -111,8 +146,12 @@ const server = http.createServer((request, response) => {
         response.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' }).end(JSON.stringify({ error: 'Invalid JSON body' }));
         return;
       }
-      if (!payload || typeof payload.model !== 'string' || !Array.isArray(payload.messages) || payload.messages.length === 0) {
-        response.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' }).end(JSON.stringify({ error: 'A model and chat messages are required' }));
+      if (!request.headers['content-type']?.toLowerCase().startsWith('application/json')) {
+        sendJson(response, 415, { error: 'Chat requests must use application/json.' });
+        return;
+      }
+      if (!validChatPayload(payload)) {
+        sendJson(response, 400, { error: 'The local chat request has invalid fields or exceeds the allowed context size.' });
         return;
       }
       chatWithInstalledLocalModel(request, response, payload);
@@ -124,24 +163,39 @@ const server = http.createServer((request, response) => {
     return;
   }
 
-  const relativePath = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
+  const safePath = pathname.replaceAll('\\', '/');
+  const relativePath = safePath === '/' ? 'index.html' : safePath.replace(/^\/+/, '');
+  const segments = relativePath.split('/');
+  const publicPath = PUBLIC_PAGES.has(relativePath) || ['src', 'assets'].includes(segments[0]);
+  if (!publicPath || segments.some((segment) => segment.startsWith('.') || segment === '..')) {
+    response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8', 'X-Content-Type-Options': 'nosniff' }).end('Not found');
+    return;
+  }
   const filePath = path.resolve(ROOT, relativePath);
   if (filePath !== ROOT && !filePath.startsWith(`${ROOT}${path.sep}`)) {
     response.writeHead(403).end('Forbidden');
     return;
   }
 
-  fs.stat(filePath, (error, stat) => {
-    if (error || !stat.isFile()) {
+  fs.realpath(filePath, (realPathError, realPath) => {
+    if (realPathError || (realPath !== ROOT && !realPath.startsWith(`${ROOT}${path.sep}`))) {
+      response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8', 'X-Content-Type-Options': 'nosniff' }).end('Not found');
+      return;
+    }
+    fs.stat(realPath, (error, stat) => {
+    if (error || !stat.isFile() || !MIME[path.extname(realPath).toLowerCase()]) {
       response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Not found');
       return;
     }
     response.writeHead(200, {
-      'Content-Type': MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
+      'Content-Type': MIME[path.extname(realPath).toLowerCase()],
       'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'no-referrer',
+      'Cross-Origin-Resource-Policy': 'same-origin',
       'Cache-Control': 'no-cache',
     });
-    fs.createReadStream(filePath).pipe(response);
+    fs.createReadStream(realPath).pipe(response);
+    });
   });
 });
 

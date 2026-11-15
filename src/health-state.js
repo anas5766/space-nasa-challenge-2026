@@ -1,11 +1,14 @@
+import { evaluateHealthRisk, missionContextKey } from './services/health-risk-engine.mjs';
+import { VALIDATED_THRESHOLDS } from './services/validated-thresholds.js';
+
 export const METRIC_DEFINITIONS = [
-  { id: 'heartRate', name: 'Heart rate', unit: 'bpm', low: 60, high: 90 },
-  { id: 'bloodPressure', name: 'Systolic blood pressure', unit: 'mmHg', low: 90, high: 140 },
-  { id: 'bloodSugar', name: 'Blood glucose', unit: 'mg/dL', low: 70, high: 140 },
-  { id: 'hydration', name: 'Hydration', unit: '%', low: 65, high: 100 },
-  { id: 'sleep', name: 'Sleep', unit: 'hrs', low: 7, high: 9 },
-  { id: 'temperature', name: 'Temperature', unit: '°C', low: 36, high: 38 },
-  { id: 'oxygen', name: 'Blood oxygen', unit: '%', low: 94, high: 100 },
+  { id: 'heartRate', name: 'Heart rate', unit: 'bpm' },
+  { id: 'bloodPressure', name: 'Systolic blood pressure', unit: 'mmHg' },
+  { id: 'bloodSugar', name: 'Blood glucose', unit: 'mg/dL' },
+  { id: 'hydration', name: 'Hydration', unit: '%' },
+  { id: 'sleep', name: 'Sleep', unit: 'hrs' },
+  { id: 'temperature', name: 'Temperature', unit: '°C' },
+  { id: 'oxygen', name: 'Blood oxygen', unit: '%' },
 ];
 
 const SYMPTOM_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -34,15 +37,10 @@ export function readHealthHistory() {
   return readArray('orbital-history').filter((item) => item && typeof item === 'object');
 }
 
-export const metricLabel = (level) => ({normal:'STABLE', warning:'ATTENTION', moderate:'MODERATE', critical:'CRITICAL'})[level] || 'UNKNOWN';
-
-export function metricStatus(value, low, high) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 'unknown';
-  const distance = numeric < low ? low - numeric : numeric > high ? numeric - high : 0;
-  const span = high - low;
-  return distance === 0 ? 'normal' : distance < span * .25 ? 'warning' : distance < span * .5 ? 'moderate' : 'critical';
-}
+export const metricLabel = (state) => ({
+  logged: 'LOGGED', synthetic: 'DEMO DATA', stale: 'STALE', 'context-mismatch': 'OTHER MISSION', unknown: 'NOT RECORDED',
+  normal: 'NO REVIEW SIGNAL', attention: 'REVIEW SIGNAL', urgent: 'URGENT', warning: 'REVIEW SIGNAL', moderate: 'REVIEW SIGNAL', critical: 'URGENT',
+})[state] || 'UNKNOWN';
 
 export function symptomStatus(value) {
   const severity = Math.max(0, Math.min(10, Number(value) || 0));
@@ -51,16 +49,27 @@ export function symptomStatus(value) {
 
 export function readHealthSnapshot() {
   const storedMetrics = readMetricLog().filter((item) => item && typeof item === 'object');
-  const readings = METRIC_DEFINITIONS.flatMap((definition) => {
+  let missionContext = {};
+  let baseline = null;
+  try { missionContext = JSON.parse(localStorage.getItem('valmed-mission-context-v1') || '{}'); } catch { missionContext = {}; }
+  try { baseline = JSON.parse(localStorage.getItem('valmed-personal-reference-v1') || 'null'); } catch { baseline = null; }
+  const activeMissionKey = missionContextKey(missionContext);
+  const now = Date.now();
+  const readings = METRIC_DEFINITIONS.map((definition) => {
     const stored = storedMetrics.find((item) => item.id === definition.id);
-    if (stored?.value === null || stored?.value === undefined || stored?.value === '') return [];
-    const value = Number(stored?.value);
-    if (!Number.isFinite(value)) return [];
-    return [{ ...definition, value, status: 'logged', recordedAt: stored.at || null }];
+    if (stored?.value === null || stored?.value === undefined || stored?.value === '' || !Number.isFinite(Number(stored?.value))) {
+      return { ...definition, value: null, status: 'unknown', source: 'not-recorded', recordedAt: null, current: false };
+    }
+    const recordContext = stored.missionContext || (stored.demoMissionId ? { location: 'lunar_surface', gravity: 'lunar' } : { location: 'earth', gravity: 'earth' });
+    const age = now - Date.parse(stored.at || '');
+    const sameContext = missionContextKey(recordContext) === activeMissionKey;
+    const fresh = Number.isFinite(age) && age >= 0 && age <= SYMPTOM_WINDOW_MS;
+    const synthetic = Boolean(stored.demoMissionId);
+    const status = !sameContext ? 'context-mismatch' : !fresh ? 'stale' : synthetic ? 'synthetic' : 'logged';
+    return { ...definition, value: Number(stored.value), status, source: synthetic ? 'synthetic-demo' : 'user-entry', missionContext: recordContext, recordedAt: stored.at || null, current: sameContext && fresh };
   });
   const metricStatuses = Object.fromEntries(readings.map(({ id, status }) => [id, status]));
   const allSymptoms = readSymptomLog().filter((symptom) => symptom && typeof symptom === 'object');
-  const now = Date.now();
   const currentSymptoms = allSymptoms
     .filter((symptom) => {
       const age = now - Date.parse(symptom.at);
@@ -79,14 +88,20 @@ export function readHealthSnapshot() {
     const previous = bodyRegions[symptom.region];
     if (!previous || severityLevels.indexOf(symptom.status) > severityLevels.indexOf(previous)) bodyRegions[symptom.region] = symptom.status;
   }
+  const currentReadings = readings.filter((reading) => reading.current && reading.value !== null);
+  const assessment = evaluateHealthRisk({ readings: currentReadings, history: readHealthHistory(), symptoms: allSymptoms, baseline, thresholds: VALIDATED_THRESHOLDS, missionContext, now });
   return {
-    note: 'User-entered prototype values. Reference ranges are illustrative, unverified, and not clinical thresholds. Logged symptoms may be historical; only currentSymptoms are treated as recent reports.',
+    note: 'Records are labeled as user-entered, synthetic demo, stale, from another mission context, or not recorded. The assessment uses current, context-matched data and does not apply generic clinical cutoffs.',
     readings,
+    currentReadings,
+    assessment,
     metricStatuses,
     currentSymptoms,
     recentSymptomHistory: allSymptoms.slice(0, 8),
     bodyRegions,
-    hasReadings: readings.length > 0,
+    hasReadings: currentReadings.length > 0,
+    hasUserReadings: currentReadings.some((reading) => reading.source === 'user-entry'),
+    missionContext,
   };
 }
 
@@ -155,16 +170,16 @@ export function announceHealthStateChange() {
   return snapshot;
 }
 
-export function saveMetricLog(readings) {
+export function saveMetricLog(readings, { missionContext = {} } = {}) {
   const previous = new Map(readMetricLog().map((item) => [item.id, item]));
   const timestamp = new Date().toISOString();
   for (const reading of readings) {
     if (!reading || reading.value === null || reading.value === undefined || reading.value === '' || !Number.isFinite(Number(reading.value))) continue;
-    previous.set(reading.id, { id: reading.id, value: Number(reading.value), at: timestamp });
+    previous.set(reading.id, { id: reading.id, value: Number(reading.value), at: timestamp, source: 'user-entry', missionContext: { location: missionContext.location || 'earth', gravity: missionContext.gravity || 'earth' } });
   }
   const values = [...previous.values()]
     .filter((reading) => reading && reading.value !== null && reading.value !== undefined && reading.value !== '' && Number.isFinite(Number(reading.value)))
-    .map(({ id, value, at }) => ({ id, value: Number(value), at: at || timestamp }));
+    .map((reading) => ({ ...reading, value: Number(reading.value), at: reading.at || timestamp }));
   localStorage.setItem('orbital-metrics', JSON.stringify(values));
   announceHealthStateChange();
   return values;

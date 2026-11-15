@@ -1,7 +1,6 @@
-import { METRIC_DEFINITIONS, addSymptomEntry, announceHealthStateChange, readHealthHistory, readMetricLog, readSymptomLog, saveMetricLog, saveSymptomLog } from './health-state.js';
-import { missionContextKey, evaluateHealthRisk } from './services/health-risk-engine.mjs';
-import { VALIDATED_THRESHOLDS } from './services/validated-thresholds.js';
-import { buildDemoMissionData, DEMO_MISSION_ID, isUntouchedLegacyDemo } from './data/demo-mission.mjs';
+import { METRIC_DEFINITIONS, addSymptomEntry, announceHealthStateChange, metricLabel, readHealthHistory, readHealthSnapshot, readMetricLog, readSymptomLog, saveMetricLog, saveSymptomLog } from './health-state.js';
+import { missionContextKey } from './services/health-risk-engine.mjs';
+import { buildDemoMissionData, DEMO_MISSION_ID, PREVIOUS_DEMO_MISSION_IDS, isUntouchedLegacyDemo } from './data/demo-mission.mjs';
 import { selectRecentHistory } from './data/health-history.mjs';
 import './protocols/protocol-ui.js';
 
@@ -9,6 +8,7 @@ const BASELINE_KEY = 'valmed-personal-reference-v1';
 const MISSION_CONTEXT_KEY = 'valmed-mission-context-v1';
 const DEMO_FLAG_KEY = 'valmed-demo-mission-150d-active';
 const CREW_RECORD_KEY = 'valmed-crew-record-mode';
+const isDemoRecord = (value) => [DEMO_MISSION_ID, ...PREVIOUS_DEMO_MISSION_IDS].includes(value);
 
 function installDemoMission({ force = false } = {}) {
   const hasExistingData = ['orbital-metrics', 'orbital-history', 'orbital-symptoms', BASELINE_KEY, MISSION_CONTEXT_KEY].some((key) => {
@@ -51,17 +51,27 @@ announceHealthStateChange();
 const riskStyle = document.createElement('link'); riskStyle.rel = 'stylesheet'; riskStyle.href = 'src/services/health-risk-ui.css'; document.head.append(riskStyle);
 
 const icons = { heartRate: '⌁', bloodPressure: '↕', bloodSugar: '◉', hydration: '◒', sleep: '☾', temperature: '♨', oxygen: '◉' };
-const defs = METRIC_DEFINITIONS.map(({ id, name, unit, low, high }) => [id, name, unit, low, high, icons[id]]);
-const defaults = { heartRate: 74, bloodPressure: 118, bloodSugar: 92, hydration: 63, sleep: 6.5, temperature: 36.7, oxygen: 98 };
+const defs = METRIC_DEFINITIONS.map(({ id, name, unit }) => [id, name, unit, icons[id]]);
+const CHART_METRICS = new Map([
+  ...METRIC_DEFINITIONS.map((metric) => [metric.id, metric]),
+  ...[
+    ['heartRateVariabilityMs', 'Heart-rate variability', 'ms'], ['bodyMassKg', 'Body mass', 'kg'],
+    ['exerciseMinutes24h', 'Exercise time · last 24 h', 'min'], ['fluidIntakeMl24h', 'Fluid intake · last 24 h', 'mL'],
+    ['radiationDoseMsv', 'Cumulative dosimeter reading', 'mSv'], ['particulateMgM3', 'Airborne particulate / dust', 'mg/m³'],
+    ['evaMinutes24h', 'EVA time · last 24 h', 'min'], ['co2PartialPressureKpa', 'Cabin CO₂ partial pressure', 'kPa'],
+    ['resupplyDays', 'Resupply autonomy', 'days'],
+  ].map(([id, name, unit]) => [id, { id, name, unit }]),
+]);
 let storedMetrics = readMetricLog();
-let readings = defs.map(([id, name, unit, low, high, icon]) => ({ id, name, unit, low, high, icon, value: Number(storedMetrics.find((item) => item.id === id)?.value ?? defaults[id]) }));
+let readings = defs.map(([id, name, unit, icon]) => ({ id, name, unit, icon, value: Number(storedMetrics.find((item) => item.id === id)?.value ?? NaN) }));
 let hasSavedReadings = storedMetrics.length > 0;
 let savedMetricIds = new Set(storedMetrics.map((item) => item.id));
-let demoMissionActive = localStorage.getItem(DEMO_FLAG_KEY) === DEMO_MISSION_ID;
+let demoMissionActive = isDemoRecord(localStorage.getItem(DEMO_FLAG_KEY));
 let history = readHealthHistory();
 let symptoms = readSymptomLog();
 function readMissionContext() { try { const value = JSON.parse(localStorage.getItem(MISSION_CONTEXT_KEY) || '{}'); return value && typeof value === 'object' ? value : {}; } catch { return {}; } }
 let missionContext = readMissionContext();
+let healthSnapshot = readHealthSnapshot();
 const nice = (n) => Number.isInteger(n) ? `${n}` : Number(n).toFixed(1);
 const symptomLabels = { headache: 'Headache or dizziness', chest: 'Chest pain or pressure', breathing: 'Difficulty breathing', fainting: 'Fainting / loss of consciousness', confusion: 'Sudden confusion', weakness: 'Severe new weakness', 'rapid-worsening': 'Rapidly worsening symptoms', nausea: 'Nausea', muscle: 'Weakness or muscle pain', vision: 'Vision changes', other: 'Other' };
 const regionLabels = { head: 'Head / eyes', chest: 'Chest', abdomen: 'Abdomen', back: 'Back', arm: 'Arm', leg: 'Leg', general: 'General' };
@@ -80,17 +90,11 @@ function readPersonalBaseline() {
 }
 
 function renderHealthRisk() {
+  healthSnapshot = readHealthSnapshot();
   const host = document.getElementById('healthRiskResult');
   if (!host) return;
   const baseline = readPersonalBaseline();
-  const result = evaluateHealthRisk({
-    readings: hasSavedReadings ? readings.filter((item) => savedMetricIds.has(item.id)) : [],
-    history,
-    symptoms,
-    baseline,
-    thresholds: VALIDATED_THRESHOLDS,
-    missionContext,
-  });
+  const result = healthSnapshot.assessment;
   const stateLabels = { normal: 'NO RULE TRIGGERED', attention: 'REVIEW SIGNALS', urgent: 'URGENT MEDICAL ESCALATION', unknown: 'INSUFFICIENT DATA' };
   const stateLabel = stateLabels[result.overallState] || stateLabels.unknown;
   const findings = result.findings.length ? result.findings.map((finding) => {
@@ -111,36 +115,44 @@ function renderHealthRisk() {
   host.innerHTML = `<div class="risk-overview" data-state="${escapeHtml(result.overallState)}"><div><span class="risk-kicker">ENGINE ${escapeHtml(result.engineVersion)}</span><strong>${escapeHtml(stateLabel)}</strong></div><p>${escapeHtml(result.summary)}</p></div>${missionPanel}<div class="risk-columns"><div><h3>Why this result?</h3><div class="risk-findings">${findings}</div>${missing}</div><aside class="risk-recommendations"><h3>Suggested next steps</h3><ul>${recommendations}</ul></aside></div>${hazards}<details class="risk-hazard-context"><summary>Five mission hazard domains in scope · not symptom diagnoses</summary><p class="risk-hazard-note">These domains come from the selected mission profile. They describe what the crew should monitor; they are not evidence that a logged symptom was caused by a hazard and they do not create a 3D body alert.</p><div class="risk-hazard-grid">${result.hazardContext.map((hazard) => `<article><strong>${escapeHtml(hazard.label)}</strong><p>${escapeHtml(hazard.relevance)}</p><small>${hazard.indicators.map(escapeHtml).join(' · ')}</small></article>`).join('')}</div></details><details class="risk-limitations"><summary>Method, evidence and limitations</summary><ul>${result.limitations.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul><p>NASA context: <a href="https://www.nasa.gov/hrp/hazards/" target="_blank" rel="noopener">Five Hazards of Human Spaceflight</a> · <a href="https://www.nasa.gov/ochmo/health-and-medical-systems/in-flight-medical-care/" target="_blank" rel="noopener">NASA in-flight medical care</a>.</p></details>`;
   const setButton = document.getElementById('setHealthBaseline');
   const clearButton = document.getElementById('clearHealthBaseline');
-  if (setButton) { setButton.disabled = !hasSavedReadings; setButton.textContent = baseline ? 'Update personal reference' : 'Set personal reference'; }
+  if (setButton) { setButton.disabled = !healthSnapshot.currentReadings.some((reading) => reading.source === 'user-entry'); setButton.textContent = baseline ? 'Update personal reference' : 'Set personal reference'; }
   if (clearButton) clearButton.hidden = !baseline;
 }
 
 function render() {
+  healthSnapshot = readHealthSnapshot();
+  hasSavedReadings = healthSnapshot.currentReadings.length > 0;
+  readings = defs.map(([id, name, unit, icon]) => ({ id, name, unit, icon, value: Number(healthSnapshot.readings.find((item) => item.id === id)?.value ?? NaN) }));
   document.getElementById('healthMetrics').innerHTML = readings.map((m) => {
-    const isSaved = savedMetricIds.has(m.id);
-    const saved = storedMetrics.find((item) => item.id === m.id);
-    const timestamp = saved?.at && Number.isFinite(Date.parse(saved.at)) ? new Date(saved.at).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' }) : '';
-    const isSynthetic = saved?.demoMissionId === DEMO_MISSION_ID;
-    return `<article class="metric-card cyan normal"><div class="metric-top"><span class="metric-icon">${m.icon}</span><span class="metric-state"><i></i>${isSynthetic ? 'DEMO DATA' : isSaved ? 'LOGGED' : 'NO DATA'}</span></div><div class="metric-name">${m.name}</div><div class="metric-number">${isSaved ? nice(m.value) : '—'} <small>${m.unit}</small></div><div class="metric-range"><span>PERSONAL LOG · NO CLINICAL CUTOFF</span></div><div class="metric-bottom"><span class="metric-caption">${isSynthetic ? 'SYNTHETIC · NOT CREW DATA' : isSaved ? `RECORDED ${timestamp}` : 'NO READING RECORDED'}</span><button class="trend-pill neutral" type="button" data-chart-metric="${m.id}">VIEW TREND</button></div></article>`;
+    const record = healthSnapshot.readings.find((item) => item.id === m.id);
+    const isSaved = record?.value !== null;
+    const timestamp = record?.recordedAt && Number.isFinite(Date.parse(record.recordedAt)) ? new Date(record.recordedAt).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' }) : '';
+    const caption = record?.status === 'synthetic' ? 'SYNTHETIC · NOT CREW DATA' : record?.status === 'context-mismatch' ? 'NOT USED FOR THIS MISSION' : record?.status === 'stale' ? `STALE · RECORDED ${timestamp}` : isSaved ? `RECORDED ${timestamp}` : 'NO READING RECORDED';
+    return `<article class="metric-card cyan normal"><div class="metric-top"><span class="metric-icon">${m.icon}</span><span class="metric-state"><i></i>${metricLabel(record?.status || 'unknown')}</span></div><div class="metric-name">${m.name}</div><div class="metric-number">${isSaved ? nice(record.value) : '—'} <small>${m.unit}</small></div><div class="metric-range"><span>PERSONAL LOG · NO CLINICAL CUTOFF</span></div><div class="metric-bottom"><span class="metric-caption">${caption}</span><button class="trend-pill neutral" type="button" data-chart-metric="${m.id}">VIEW TREND</button></div></article>`;
   }).join('');
   document.querySelectorAll('[data-chart-metric]').forEach((button) => button.addEventListener('click', () => { document.getElementById('healthChartMetric').value = button.dataset.chartMetric; renderChart(); document.getElementById('healthChart').scrollIntoView({ behavior: 'smooth', block: 'center' }); }));
-  document.getElementById('healthStatus').textContent = demoMissionActive ? 'Synthetic mission scenario loaded. These are not crew measurements.' : !hasSavedReadings ? 'No readings recorded. Log only measurements taken with approved equipment.' : 'Readings saved. Review the explainable assessment below.';
+  document.getElementById('healthStatus').textContent = demoMissionActive ? 'Synthetic mission scenario loaded. These are not crew measurements.' : !hasSavedReadings ? 'No current, mission-matched readings. Log only measurements taken with approved equipment.' : 'Readings saved. Review the explainable assessment below.';
   document.getElementById('healthMessage').textContent = 'No population cutoffs or medical readiness score are used. Compare with the mission-approved procedure and personal trend.';
   document.getElementById('healthReadiness').textContent = 'NOT SCORED'; document.getElementById('healthReadinessBar').style.width = '0%';
   renderChart(); renderSymptoms(); renderHealthRisk();
 }
 
 function renderChart() {
-  const id = document.getElementById('healthChartMetric').value; const metric = readings.find((m) => m.id === id);
+  const id = document.getElementById('healthChartMetric').value; const metric = CHART_METRICS.get(id);
   const values = selectRecentHistory(history.filter(entry => missionContextKey(entry.missionContext || {}) === missionContextKey(missionContext)), id, 12);
   document.getElementById('healthChartValue').innerHTML = `${values.length ? nice(values.at(-1).readings[id]) : '—'} <small>${metric.unit}</small>`;
   const graph = document.getElementById('healthChart');
-  if (!values.length) { graph.innerHTML = '<span class="history-empty">Save a check-in to start your personal trend.</span>'; document.getElementById('healthDates').replaceChildren(); document.getElementById('healthEntries').replaceChildren(); return; }
-  const nums = values.map((entry) => Number(entry.readings[id])); const min = Math.min(...nums); const max = Math.max(...nums); const span = max - min || Math.max(1, max * .1);
-  const points = nums.map((value, index) => `${(index / Math.max(1, nums.length - 1)) * 100},${88 - (value - min) / span * 70}`).join(' ');
-  graph.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="${metric.name} over time"><polyline points="${points}"/></svg>`;
+  const eventHost = document.getElementById('healthChartEvents');
+  if (!values.length) { graph.innerHTML = '<span class="history-empty">No compatible history for this mission context. Log measurements to start a personal trend.</span>'; document.getElementById('healthDates').replaceChildren(); document.getElementById('healthEntries').replaceChildren(); eventHost?.replaceChildren(); return; }
+  const nums = values.map((entry) => Number(entry.readings[id])); const min = Math.min(...nums); const max = Math.max(...nums); const span = max - min || Math.max(1, Math.abs(max) * .1);
+  const xFor = (index) => (index / Math.max(1, nums.length - 1)) * 100;
+  const yFor = (value) => 88 - ((value - min) / span) * 70;
+  const points = nums.map((value, index) => `${xFor(index)},${yFor(value)}`).join(' ');
+  const eventMarkers = values.map((entry, index) => entry.missionEvent ? `<g><line x1="${xFor(index)}" y1="8" x2="${xFor(index)}" y2="92" stroke="#ffc66d" stroke-width="0.6" stroke-dasharray="2 2"/><circle cx="${xFor(index)}" cy="${yFor(nums[index])}" r="2.3" fill="#ffc66d"><title>Mission day ${entry.missionDay}: ${escapeHtml(entry.missionEvent.title)}</title></circle></g>` : '').join('');
+  graph.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="${escapeHtml(metric.name)} over time, with synthetic mission events marked in amber"><polyline points="${points}"/>${eventMarkers}</svg>`;
   document.getElementById('healthDates').innerHTML = values.map((entry) => `<span>${new Date(entry.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>`).join('');
   document.getElementById('healthEntries').innerHTML = values.slice(-4).reverse().map((entry) => `<span>${new Date(entry.at).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })} <b>${nice(Number(entry.readings[id]))} ${metric.unit}</b></span>`).join('');
+  if (eventHost) eventHost.innerHTML = values.filter((entry) => entry.missionEvent).map((entry) => `<span>DAY ${entry.missionDay} · <b>${escapeHtml(entry.missionEvent.title)}</b></span>`).join('') || '<span>No mission event is annotated in this interval.</span>';
 }
 
 function renderSymptoms() {
@@ -153,9 +165,38 @@ function renderSymptoms() {
 }
 
 const dialog = document.getElementById('healthDialog'); const form = document.getElementById('healthForm');
-document.getElementById('healthLog').addEventListener('click', () => { [...form.elements].filter((field) => Object.hasOwn(defaults, field.name)).forEach((field) => { field.value = ''; }); dialog.showModal(); });
-form.addEventListener('submit', (event) => { if (event.submitter?.value === 'cancel') return; event.preventDefault(); const data = new FormData(form); const updates = readings.filter((metric) => String(data.get(metric.id) || '').trim() !== '').map((metric) => ({ ...metric, value: Number(data.get(metric.id)) })); if (!updates.length) { toast('Enter at least one measured value. Unknown or unmeasured fields can stay blank.'); return; } updates.forEach((updated) => { const metric = readings.find((item) => item.id === updated.id); metric.value = updated.value; }); const now = new Date().toISOString(); history.unshift({ at: now, missionContext: { location: missionContext.location || 'earth', gravity: missionContext.gravity || 'earth' }, readings: Object.fromEntries(updates.map(({ id, value }) => [id, value])) }); history = history.slice(0, 80); localStorage.setItem('orbital-history', JSON.stringify(history)); storedMetrics = saveMetricLog(updates); savedMetricIds = new Set(storedMetrics.map((item) => item.id)); hasSavedReadings = savedMetricIds.size > 0; markOverviewTask('checkin'); dialog.close(); render(); toast(`${updates.length} measured ${updates.length === 1 ? 'value' : 'values'} saved. Other indicators were left unchanged.`); });
-document.getElementById('setHealthBaseline').addEventListener('click', () => { if (!hasSavedReadings) return; const existing = readPersonalBaseline(); if (existing && !window.confirm('Replace your current user-designated reference with the latest saved readings?')) return; const reference = { createdAt: new Date().toISOString(), label: 'User-designated comparison reference; not a clinical norm', missionContext: { location: missionContext.location || 'earth', gravity: missionContext.gravity || 'earth' }, readings: Object.fromEntries(readings.filter(({ id }) => savedMetricIds.has(id)).map(({ id, value, unit }) => [id, { value: Number(value), unit: METRIC_DEFINITIONS.find((item) => item.id === id)?.unit || unit }])) }; try { localStorage.setItem(BASELINE_KEY, JSON.stringify(reference)); renderHealthRisk(); toast('Personal reference saved on this device.'); } catch { toast('Could not save personal reference.'); } });
+document.getElementById('healthLog').addEventListener('click', () => { [...form.elements].filter((field) => defs.some(([id]) => id === field.name)).forEach((field) => { field.value = ''; }); dialog.showModal(); });
+form.addEventListener('submit', (event) => {
+  if (event.submitter?.value === 'cancel') return;
+  event.preventDefault();
+  const data = new FormData(form);
+  const updates = readings.filter((metric) => String(data.get(metric.id) || '').trim() !== '').map((metric) => ({ ...metric, value: Number(data.get(metric.id)) }));
+  if (!updates.length) { toast('Enter at least one measured value. Unknown or unmeasured fields can stay blank.'); return; }
+  updates.forEach((updated) => { const metric = readings.find((item) => item.id === updated.id); metric.value = updated.value; });
+  const now = new Date().toISOString();
+  const recordContext = { location: missionContext.location || 'earth', gravity: missionContext.gravity || 'earth' };
+  history.unshift({ at: now, missionContext: recordContext, readings: Object.fromEntries(updates.map(({ id, value }) => [id, value])) });
+  history = history.slice(0, 80);
+  localStorage.setItem('orbital-history', JSON.stringify(history));
+  storedMetrics = saveMetricLog(updates, { missionContext: recordContext });
+  savedMetricIds = new Set(storedMetrics.map((item) => item.id));
+  hasSavedReadings = true;
+  markOverviewTask('checkin'); dialog.close(); render();
+  toast(`${updates.length} measured ${updates.length === 1 ? 'value' : 'values'} saved for this mission context.`);
+});
+document.getElementById('setHealthBaseline').addEventListener('click', () => {
+  const currentUserReadings = healthSnapshot.currentReadings.filter((reading) => reading.source === 'user-entry');
+  if (!currentUserReadings.length) return;
+  const existing = readPersonalBaseline();
+  if (existing && !window.confirm('Replace your current user-designated reference with the latest user-entered readings?')) return;
+  const reference = {
+    createdAt: new Date().toISOString(), label: 'User-designated comparison reference; not a clinical norm',
+    missionContext: { location: missionContext.location || 'earth', gravity: missionContext.gravity || 'earth' },
+    readings: Object.fromEntries(currentUserReadings.map(({ id, value, unit }) => [id, { value: Number(value), unit }])),
+  };
+  try { localStorage.setItem(BASELINE_KEY, JSON.stringify(reference)); renderHealthRisk(); toast('Personal reference saved on this device.'); }
+  catch { toast('Could not save personal reference.'); }
+});
 document.getElementById('clearHealthBaseline').addEventListener('click', () => { try { localStorage.removeItem(BASELINE_KEY); renderHealthRisk(); toast('Personal reference cleared.'); } catch { toast('Could not clear personal reference.'); } });
 document.getElementById('healthChartMetric').addEventListener('change', renderChart);
 document.getElementById('symptomAdd').addEventListener('click', () => { document.getElementById('symptomForm').reset(); document.getElementById('symptomDialog').showModal(); });
@@ -167,11 +208,25 @@ document.getElementById('healthReport').addEventListener('click', async () => {
   const currentSymptoms = symptoms.filter(inCurrentWindow);
   const historicalSymptoms = symptoms.filter((item) => !inCurrentWindow(item));
   const symptomLine = (s) => `- ${symptomLabels[s.kind] || s.kind}, ${regionLabels[s.region] || s.region}, intensity ${s.severity}/10${s.note ? ` — ${s.note}` : ''}`;
-  const text = ['Valmed · CREW HEALTH SUMMARY', new Date().toLocaleString('en-US'), '', `Mission location: ${missionContext.location || 'earth'}`, `Gravity environment: ${missionContext.gravity || 'earth'}`, 'Mission and environmental context:', ...(contextLines.length ? contextLines : ['- No additional mission telemetry entered']), '', 'Recorded measurements:', ...(hasSavedReadings ? readings.filter((m) => savedMetricIds.has(m.id)).map((m) => { const saved = storedMetrics.find((item) => item.id === m.id); const at = saved?.at && Number.isFinite(Date.parse(saved.at)) ? new Date(saved.at).toISOString() : 'timestamp unavailable'; const source = saved?.demoMissionId === DEMO_MISSION_ID ? ' · SYNTHETIC DEMO, NOT CREW DATA' : ''; return `- ${m.name}: ${nice(m.value)} ${m.unit} · recorded ${at}${source}`; }) : ['- No measurements recorded.']), '', 'Symptoms in current 24-hour assessment window:', ...(currentSymptoms.length ? currentSymptoms.map(symptomLine) : ['- None']), '', 'Historical symptom entries (not included in current assessment):', ...(historicalSymptoms.length ? historicalSymptoms.map(symptomLine) : ['- None']), '', 'Entered data only; not a diagnosis.'].join('\n');
+  const measurementLines = healthSnapshot.readings.filter((reading) => reading.value !== null).map((reading) => {
+    const context = reading.missionContext ? `${reading.missionContext.location}/${reading.missionContext.gravity}` : 'legacy context unknown';
+    const at = reading.recordedAt && Number.isFinite(Date.parse(reading.recordedAt)) ? new Date(reading.recordedAt).toISOString() : 'timestamp unavailable';
+    const source = reading.source === 'synthetic-demo' ? 'SYNTHETIC DEMO' : reading.source === 'user-entry' ? 'USER-ENTERED' : 'SOURCE UNKNOWN';
+    return `- ${reading.name}: ${nice(reading.value)} ${reading.unit} · ${source} · ${metricLabel(reading.status)} · ${context} · recorded ${at}`;
+  });
+  const text = ['VALMED · CREW HEALTH SUMMARY', new Date().toLocaleString('en-US'), '', `Active mission: ${missionContext.location || 'earth'} / ${missionContext.gravity || 'earth'}`, 'Mission and environmental context:', ...(contextLines.length ? contextLines : ['- No additional mission telemetry entered']), '', 'Recorded measurements (source and mission status shown for every value):', ...(measurementLines.length ? measurementLines : ['- No measurements recorded.']), '', 'Current explainable assessment:', healthSnapshot.assessment.summary, ...healthSnapshot.assessment.recommendations.map((item) => `- ${item}`), '', 'Symptoms in current 24-hour assessment window:', ...(currentSymptoms.length ? currentSymptoms.map(symptomLine) : ['- None']), '', 'Historical symptom entries (not included in current assessment):', ...(historicalSymptoms.length ? historicalSymptoms.map(symptomLine) : ['- None']), '', 'User-entered or synthetic records are unverified; this report is not a diagnosis or medical clearance.'].join('\n');
   try { await navigator.clipboard.writeText(text); toast('Report copied to clipboard.'); }
   catch { const area = document.createElement('textarea'); area.value = text; document.body.append(area); area.select(); document.execCommand('copy'); area.remove(); toast('Report copied.'); }
 });
-document.getElementById('healthExport').addEventListener('click', () => { const csv = [['date', ...defs.map((d) => `${d[1]} (${d[2]})`)], ...history.map((entry) => [entry.at, ...defs.map((d) => entry.readings?.[d[0]] ?? '')])].map((row) => row.join(',')).join('\n'); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'valmed-health-history.csv'; a.click(); URL.revokeObjectURL(a.href); });
+document.getElementById('healthExport').addEventListener('click', () => {
+  const quote = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+  const headers = ['recorded_at', 'source', 'mission_location', 'gravity', ...defs.map((item) => `${item[1]} (${item[2]})`), 'mission_event'];
+  const rows = history.map((entry) => [entry.at, entry.source || (entry.missionContext?.demoMissionId ? 'synthetic-demo' : 'user-entry'), entry.missionContext?.location || 'legacy-unknown', entry.missionContext?.gravity || 'legacy-unknown', ...defs.map((item) => entry.readings?.[item[0]] ?? ''), entry.missionEvent?.title || '']);
+  const csv = [headers, ...rows].map((row) => row.map(quote).join(',')).join('\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'valmed-health-history.csv'; anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
 
 const missionForm = document.getElementById('missionContextForm');
 const loadDemoButton = document.getElementById('loadDemoMission');
@@ -188,11 +243,11 @@ if (startCrewRecord) {
     if (!window.confirm('Remove synthetic demo entries and start a crew record? Non-demo entries will be kept.')) return;
     try {
       const keepNonDemo = (key, isDemo) => { const rows = JSON.parse(localStorage.getItem(key) || '[]'); localStorage.setItem(key, JSON.stringify(Array.isArray(rows) ? rows.filter((item) => !isDemo(item)) : [])); };
-      keepNonDemo('orbital-metrics', (item) => item?.demoMissionId === DEMO_MISSION_ID);
-      keepNonDemo('orbital-history', (item) => item?.missionContext?.demoMissionId === DEMO_MISSION_ID);
-      keepNonDemo('orbital-symptoms', (item) => item?.demoMissionId === DEMO_MISSION_ID);
-      const baseline = readPersonalBaseline(); if (baseline?.demoMissionId === DEMO_MISSION_ID) localStorage.removeItem(BASELINE_KEY);
-      if (missionContext.demoMissionId === DEMO_MISSION_ID) localStorage.removeItem(MISSION_CONTEXT_KEY);
+      keepNonDemo('orbital-metrics', (item) => isDemoRecord(item?.demoMissionId));
+      keepNonDemo('orbital-history', (item) => isDemoRecord(item?.missionContext?.demoMissionId));
+      keepNonDemo('orbital-symptoms', (item) => isDemoRecord(item?.demoMissionId));
+      const baseline = readPersonalBaseline(); if (isDemoRecord(baseline?.demoMissionId)) localStorage.removeItem(BASELINE_KEY);
+      if (isDemoRecord(missionContext.demoMissionId)) localStorage.removeItem(MISSION_CONTEXT_KEY);
       localStorage.removeItem(DEMO_FLAG_KEY); localStorage.setItem(CREW_RECORD_KEY, 'active'); window.location.reload();
     } catch { toast('Could not switch to a crew record on this device.'); }
   });
@@ -210,11 +265,11 @@ if (missionForm) {
     try { localStorage.setItem(MISSION_CONTEXT_KEY, JSON.stringify(missionContext)); } catch { toast('Could not save mission context on this device.'); }
     const badge = document.getElementById('missionContextBadge');
     if (badge) badge.textContent = missionForm.elements.location.selectedOptions[0]?.textContent.toUpperCase() || 'MISSION PROFILE';
-    renderHealthRisk(); renderChart();
+    render();
   };
   missionForm.addEventListener('change', (event) => { if (event.target.name === 'location') { const defaults = { earth: 'earth', leo: 'microgravity', iss: 'microgravity', transit: 'microgravity', lunar_orbit: 'microgravity', lunar_surface: 'lunar' }; missionForm.elements.gravity.value = defaults[event.target.value] || 'unknown'; } saveMissionContext(); });
   missionForm.addEventListener('input', (event) => { if (event.target.matches('input')) saveMissionContext(); });
-  missionForm.addEventListener('reset', () => { queueMicrotask(() => { missionContext = {}; try { localStorage.removeItem(MISSION_CONTEXT_KEY); } catch {} if (missionForm.elements.location) missionForm.elements.location.value = 'earth'; if (missionForm.elements.gravity) missionForm.elements.gravity.value = 'earth'; const badge = document.getElementById('missionContextBadge'); if (badge) badge.textContent = 'EARTH PROFILE'; renderHealthRisk(); renderChart(); }); });
+  missionForm.addEventListener('reset', () => { queueMicrotask(() => { missionContext = {}; try { localStorage.removeItem(MISSION_CONTEXT_KEY); } catch {} if (missionForm.elements.location) missionForm.elements.location.value = 'earth'; if (missionForm.elements.gravity) missionForm.elements.gravity.value = 'earth'; const badge = document.getElementById('missionContextBadge'); if (badge) badge.textContent = 'EARTH PROFILE'; render(); }); });
   const badge = document.getElementById('missionContextBadge');
   if (badge) badge.textContent = missionForm.elements.location.selectedOptions[0]?.textContent.toUpperCase() || 'EARTH PROFILE';
 }
@@ -223,10 +278,10 @@ window.addEventListener('storage', (event) => {
   if (event.key !== null && !['orbital-metrics', 'orbital-symptoms', 'orbital-history', BASELINE_KEY, MISSION_CONTEXT_KEY, DEMO_FLAG_KEY].includes(event.key)) return;
   const latest = readMetricLog();
   storedMetrics = latest;
-  demoMissionActive = localStorage.getItem(DEMO_FLAG_KEY) === DEMO_MISSION_ID;
+  demoMissionActive = isDemoRecord(localStorage.getItem(DEMO_FLAG_KEY));
   hasSavedReadings = latest.length > 0;
   savedMetricIds = new Set(latest.map((item) => item.id));
-  readings = defs.map(([id, name, unit, low, high, icon]) => ({ id, name, unit, low, high, icon, value: Number(latest.find((item) => item.id === id)?.value ?? defaults[id]) }));
+  readings = defs.map(([id, name, unit, icon]) => ({ id, name, unit, icon, value: Number(latest.find((item) => item.id === id)?.value ?? NaN) }));
   history = readHealthHistory();
   symptoms = readSymptomLog();
   missionContext = readMissionContext();

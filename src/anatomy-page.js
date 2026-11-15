@@ -12,8 +12,9 @@ function updateVitalsHud(snapshot) {
     const metaNode = document.getElementById(metaId);
     const card = document.getElementById(cardId);
     if (!valueNode || !metaNode || !card) continue;
-    valueNode.textContent = reading ? `${Number.isInteger(reading.value) ? reading.value : reading.value.toFixed(1)} ${reading.unit}` : '—';
-    metaNode.textContent = reading ? `${metricLabel(reading.status)} · SAVED` : 'Awaiting check-in';
+    const hasValue = reading && reading.value !== null;
+    valueNode.textContent = hasValue ? `${Number.isInteger(reading.value) ? reading.value : reading.value.toFixed(1)} ${reading.unit}` : '—';
+    metaNode.textContent = hasValue ? metricLabel(reading.status) : 'NOT RECORDED';
     card.dataset.level = reading?.status || 'unknown';
   }
 }
@@ -21,11 +22,7 @@ function updateVitalsHud(snapshot) {
 function refreshAnatomyState() {
   const snapshot = readHealthSnapshot();
   updateVitalsHud(snapshot);
-  const now = Date.now();
-  const currentReadings = snapshot.readings.filter((reading) => {
-    const age = now - Date.parse(reading.recordedAt || '');
-    return Number.isFinite(age) && age >= 0 && age < 24 * 60 * 60 * 1000;
-  });
+  const currentReadings = snapshot.currentReadings;
   const currentMetricStatuses = Object.fromEntries(currentReadings.map(({ id, status }) => [id, status]));
   window.Valmed_HEALTH = {
     ...currentMetricStatuses,

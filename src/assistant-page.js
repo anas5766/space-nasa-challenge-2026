@@ -12,16 +12,11 @@ import('./medical-assistant.js').then(({ initMedicalAssistant }) => initMedicalA
       const latest = priorityRun(runs);
       if (latest) protocolContext = JSON.stringify({ title: latest.title, level: latest.level, at: latest.at, followUpAnswers: latest.answers, measurements: latest.measurements, action: latest.action, outcome: latest.outcome });
     } catch { /* The deterministic protocol remains available even if optional context cannot be read. */ }
-    const now = Date.now();
-    const currentReadings = state.readings.filter((reading) => {
-      const age = now - Date.parse(reading.recordedAt || '');
-      return Number.isFinite(age) && age >= 0 && age < 24 * 60 * 60 * 1000;
-    });
+    const currentReadings = state.currentReadings;
     return JSON.stringify({
-      note: `${state.note} Only measurements recorded in the previous 24 hours are included as current readings; older entries are omitted.`,
+      note: `${state.note} Only fresh, mission-context-matched readings are included as current. Each reading carries a source label; synthetic demo values must never be described as crew measurements.`,
       currentReadings,
       currentSymptoms: state.currentSymptoms,
-      recentSymptomHistory: state.recentSymptomHistory,
       affectedRegions: state.bodyRegions,
       latestStructuredProtocol: protocolContext,
     }, null, 2);

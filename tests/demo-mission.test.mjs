@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildDemoMissionData, DEMO_MISSION_ID, PREVIOUS_DEMO_MISSION_ID, isUntouchedLegacyDemo } from '../src/data/demo-mission.mjs';
+import { buildDemoMissionData, DEMO_MISSION_EVENTS, DEMO_MISSION_ID, PREVIOUS_DEMO_MISSION_ID, isUntouchedLegacyDemo } from '../src/data/demo-mission.mjs';
 
 test('150-day demo contains 16 chronological checkpoints ending on mission day 150', () => {
   const now = Date.parse('2026-11-15T00:00:00.000Z');
@@ -36,6 +36,16 @@ test('demo drives explainable trends without triggering a fabricated emergency',
   assert.ok(result.findings.some((finding) => finding.label === 'hydration' && finding.reasons.some((reason) => reason.includes('decreasing trend'))));
   assert.ok(result.findings.some((finding) => finding.label === 'sleep' && finding.reasons.some((reason) => reason.includes('decreasing trend'))));
   assert.notEqual(result.overallState, 'urgent');
+});
+
+test('150-day scenario has changing longitudinal data and bounded, annotated mission events', () => {
+  const demo = buildDemoMissionData(Date.parse('2026-11-15T00:00:00.000Z'));
+  const keys = ['heartRate', 'bloodPressure', 'bloodSugar', 'hydration', 'sleep', 'temperature', 'oxygen', 'heartRateVariabilityMs', 'bodyMassKg', 'exerciseMinutes24h', 'fluidIntakeMl24h', 'radiationDoseMsv', 'particulateMgM3', 'evaMinutes24h', 'co2PartialPressureKpa'];
+  for (const key of keys) assert.ok(new Set(demo.history.map((entry) => entry.readings[key])).size > 1, `${key} should vary over the scenario`);
+  assert.deepEqual(demo.history.filter((entry) => entry.missionEvent).map((entry) => entry.missionEvent.day), DEMO_MISSION_EVENTS.map((event) => event.day));
+  assert.equal(demo.history.at(-1).missionEvent.phase, 'end');
+  assert.match(demo.assumptions, /not based on a validated astronaut physiology model/i);
+  assert.ok(demo.history.every((entry) => entry.source === 'synthetic-demo'));
 });
 
 

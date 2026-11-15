@@ -429,11 +429,11 @@ export function mountAnatomyViewer(container, { onSelect = () => {} } = {}) {
     renderDirectory();
     onSelect({ key, label, level });
   }
-  function focusStructure(key) {
-    stopAutoRotate();
+  function focusStructure(key, { automatic = false } = {}) {
+    if (!automatic) stopAutoRotate();
     const part = structureIndex.get(key);
     if (!part?.objects.length) return;
-    window.ORBITAL_AUDIO?.playCue('select');
+    if (!automatic) window.ORBITAL_AUDIO?.playCue('select');
     const layer = part.layer;
     if (layer && layerSettings.get(layer) === false) {
       layerSettings.set(layer, true);
@@ -453,8 +453,20 @@ export function mountAnatomyViewer(container, { onSelect = () => {} } = {}) {
     camera.position.copy(center).add(direction.multiplyScalar(distance));
     controls.update();
     showSelection(key);
-    [...(directoryList?.querySelectorAll('[data-structure-key]') || [])]
+    if (!automatic) [...(directoryList?.querySelectorAll('[data-structure-key]') || [])]
       .find((item) => item.dataset.structureKey === key)?.focus({ preventScroll: true });
+  }
+  function focusFirstAffectedStructure() {
+    const severity = { warning: 1, moderate: 2, critical: 3 };
+    const recentRegions = [...(healthMap.currentSymptoms || [])]
+      .filter((item) => item.status !== 'normal')
+      .sort((a, b) => (severity[b.status] || 0) - (severity[a.status] || 0) || Date.parse(b.at || 0) - Date.parse(a.at || 0))
+      .map((item) => item.region);
+    const structures = [...structureIndex.values()].filter((part) => riskFor(part.key) !== 'normal');
+    const priority = recentRegions.map((region) => structures.find((part) => regionForKey(part.key) === region)).find(Boolean);
+    const part = priority || structures[0];
+    if (part) focusStructure(part.key, { automatic: true });
+    return Boolean(part);
   }
   function loadModel(sex = currentSex) {
     currentSex = sex;
@@ -487,12 +499,15 @@ export function mountAnatomyViewer(container, { onSelect = () => {} } = {}) {
       camera.position.set(0, 1.0, 3.8);
       controls.update();
       applyColors();
+      const hasAffectedStructure = focusFirstAffectedStructure();
       status.textContent = autoRotateActive
         ? 'Auto-rotating · interact with the model or search to pause'
         : 'Rotation paused · drag to rotate · scroll or pinch to zoom';
       container.querySelector('.anatomy-load').hidden = true;
-      const firstHeart = [...structureIndex.keys()].find((key) => /heart/i.test(key));
-      if (firstHeart) showSelection(firstHeart);
+      if (!hasAffectedStructure) {
+        const firstHeart = [...structureIndex.keys()].find((key) => /heart/i.test(key));
+        if (firstHeart) showSelection(firstHeart);
+      }
     }, (event) => {
       if (event.total) status.textContent = `Loading anatomy · ${Math.min(99, Math.round(event.loaded / event.total * 100))}%`;
     }, () => {
@@ -582,7 +597,9 @@ export function mountAnatomyViewer(container, { onSelect = () => {} } = {}) {
   window.addEventListener('orbital:health-update', (event) => {
     healthMap = event.detail || {};
     applyColors();
-    if (selected) showSelection(selected);
+    if (!selected || riskFor(selected) === 'normal') {
+      if (!focusFirstAffectedStructure() && selected) showSelection(selected);
+    } else showSelection(selected);
   });
   loadModel();
 

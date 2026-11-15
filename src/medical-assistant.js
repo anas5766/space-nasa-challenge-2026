@@ -34,7 +34,7 @@ function removePrivateReasoning(value) {
 
 function explicitlyReportsCurrentRedFlag(question) {
   const text = String(question || '').toLowerCase();
-  const redFlags = [/chest pain/g, /chest pressure/g, /difficulty breathing/g, /shortness of breath/g, /can't breathe/g, /cannot breathe/g, /faint(?:ed|ing)/g, /passed out/g, /sudden confusion/g, /severe new weakness/g, /rapidly worsening/g];
+  const redFlags = [/chest pain/g, /chest pressure/g, /difficulty breathing/g, /shortness of breath/g, /can't breathe/g, /cannot breathe/g, /faint(?:ed|ing)/g, /passed out/g, /sudden confusion/g, /severe new weakness/g, /rapidly worsening/g, /dolor (?:intenso )?en el pecho/g, /presi[oó]n en el pecho/g, /me cuesta respirar/g, /falta de aire/g, /me desmay[eé]/g, /confusi[oó]n repentina/g, /debilidad (?:nueva y )?intensa/g, /empeorando r[aá]pidamente/g];
   const occurrences = redFlags.flatMap((pattern) => [...text.matchAll(pattern)].map((match) => ({ start: match.index, end: match.index + match[0].length })));
   const activeOccurrences = occurrences.filter(({ start }) => {
     const prefix = text.slice(Math.max(0, start - 70), start);
@@ -43,7 +43,7 @@ function explicitlyReportsCurrentRedFlag(question) {
   });
   if (!activeOccurrences.length) return false;
   const hypothetical = /\b(?:what if|hypothetically|for example|should i do if|if i were|if someone|if an? astronaut|if the astronaut|if the patient|in a scenario|history of|used to have|when (?:an? astronaut|the astronaut|the patient|a patient))\b/.test(text);
-  const currentMarker = /\b(?:right now|currently|at this moment|i am|i'm|i have|i've got|i'm having|i feel|i can't|i cannot|they are|they have|he has|she has|astronaut has|patient has|crew member has|the astronaut is|the patient is|experiencing|patient reports|astronaut reports|crew member reports|patient is experiencing|astronaut is experiencing|just fainted|just passed out|now|today|suddenly|getting worse|started just now|started today|began today|started \d+\s*(?:seconds?|minutes?|hours?) ago)\b/;
+  const currentMarker = /\b(?:right now|currently|at this moment|i am|i'm|i have|i've got|i'm having|i feel|i can't|i cannot|they are|they have|he has|she has|astronaut has|patient has|crew member has|the astronaut is|the patient is|experiencing|patient reports|astronaut reports|crew member reports|patient is experiencing|astronaut is experiencing|just fainted|just passed out|now|today|suddenly|getting worse|started just now|started today|began today|started \d+\s*(?:seconds?|minutes?|hours?) ago|ahora|actualmente|me duele|tengo|siento|me cuesta|me falta el aire|me desmay[eé])\b/;
   const current = activeOccurrences.some(({ start, end }) => {
     const before = text.slice(Math.max(0, start - 90), start).split(/[.!?]/).pop() || '';
     const after = text.slice(end, Math.min(text.length, end + 90)).split(/[.!?]/)[0] || '';
@@ -200,12 +200,12 @@ export function initMedicalAssistant({ getContext }) {
 
   function suggestSymptomFromText(value) {
     const text = String(value || '').toLowerCase();
-    const region = /chest|heart|breath|lung/.test(text) ? 'chest'
-      : /head|headache|dizz|vision|eye/.test(text) ? 'head'
-      : /abdomen|stomach|nausea|kidney/.test(text) ? 'abdomen'
-      : /back|spine/.test(text) ? 'back'
-      : /arm|hand|wrist|shoulder/.test(text) ? 'arm'
-      : /leg|knee|foot|ankle/.test(text) ? 'leg' : 'general';
+    const region = /chest|heart|breath|lung|rib|torso|pecho|coraz[oó]n|pulm[oó]n|costilla/.test(text) ? 'chest'
+      : /head|brain|headache|dizz|vision|eye|face|jaw|ear|cabeza|cerebro|ojo|ojos|visi[oó]n|cara|mand[ií]bula/.test(text) ? 'head'
+      : /abdomen|stomach|nausea|kidney|belly|liver|gut|est[oó]mago|abdomen|vientre|ri[nñ][oó]n|h[ií]gado/.test(text) ? 'abdomen'
+      : /back|spine|neck|shoulder blade|espalda|columna|cuello|nuca/.test(text) ? 'back'
+      : /arm|hand|wrist|shoulder|elbow|finger|biceps|forearm|brazo|mano|mu[nñ]eca|hombro|codo|dedo/.test(text) ? 'arm'
+      : /leg|knee|foot|ankle|thigh|calf|hip|femur|pierna|rodilla|pie|tobillo|muslo|cadera|pantorrilla/.test(text) ? 'leg' : 'general';
     const kind = /faint|passed out|loss of consciousness/.test(text) ? 'fainting'
       : /sudden confusion|confused/.test(text) ? 'confusion'
       : /rapidly worsening|getting worse quickly/.test(text) ? 'rapid-worsening'
@@ -215,20 +215,21 @@ export function initMedicalAssistant({ getContext }) {
       : /headache|dizz/.test(text) ? 'headache'
       : /vision|blurry|seeing/.test(text) ? 'vision'
       : /nausea|nauseous|vomit/.test(text) ? 'nausea'
-      : /weak|muscle|pain|sore/.test(text) ? 'muscle' : 'other';
-    const intensity = text.match(/\b(?:severity|intensity|pain(?: level)?)\s*(?:of|is|:)?\s*(\d{1,2})(?:\s*\/\s*10)?\b/);
+      : /weak|muscle|pain|sore|injur|hurt|ache|dolor|duele|lesi[oó]n|herida|golpe|fractur|torcedura|molestia/.test(text) ? 'muscle' : 'other';
+    const intensity = text.match(/\b(?:severity|intensity|pain(?: level)?|intensidad|dolor)\s*(?:of|is|:|de)?\s*(\d{1,2})(?:\s*\/\s*10|\s+out of 10)?\b/) || text.match(/\b(\d{1,2})\s*(?:\/|de)\s*10\b/);
     const severity = intensity ? Math.max(0, Math.min(10, Number(intensity[1]))) : 4;
     return { kind, region, severity };
   }
 
   function recordCurrentConversationSymptom(value) {
     const text = String(value || '').toLowerCase();
-    const symptomCandidate = /pain|ache|pressure|tightness|breath|headache|dizz|vision|nausea|vomit|weak|sore|tingl|unwell|faint|confus|rash|burn|symptom/.test(text);
-    const firstPersonCurrent = /\b(?:i am|i'm|i have|i've got|i feel|i'm having|i've been having|i'm experiencing|my (?:head|chest|stomach|back|arm|leg|eye|throat) (?:hurts?|aches?|is sore|feels))\b/.test(text);
-    const negatedOrHypothetical = /\b(?:what if|hypothetically|for example|if someone|if an astronaut|if the patient|i do not have|i don't have|i have no|i am not|i'm not|no symptoms|used to|previously|yesterday|resolved|gone now|no longer|stopped)\b/.test(text);
-    if (!symptomCandidate || !firstPersonCurrent || negatedOrHypothetical) return false;
+    const symptomCandidate = /pain|ache|pressure|tightness|breath|headache|dizz|vision|nausea|vomit|weak|sore|tingl|unwell|faint|confus|rash|burn|symptom|injur|hurt|wound|fractur|dolor|duele|molestia|lesi[oó]n|herida|golpe|torcedura/.test(text);
+    const bodyPart = /head|brain|eye|face|jaw|ear|neck|throat|chest|heart|lung|rib|stomach|abdomen|belly|kidney|back|spine|shoulder|arm|elbow|wrist|hand|finger|hip|leg|knee|ankle|foot|muscle|bone|cabeza|cerebro|ojo|cara|mand[ií]bula|o[ií]do|cuello|garganta|pecho|coraz[oó]n|pulm[oó]n|costilla|est[oó]mago|abdomen|ri[nñ][oó]n|espalda|columna|hombro|brazo|codo|mu[nñ]eca|mano|dedo|cadera|pierna|rodilla|tobillo|pie|m[uú]sculo|hueso/.test(text);
+    const currentReport = /\b(?:i am|i'm|i have|i've got|i feel|i'm having|i've been having|i'm experiencing|my|patient (?:has|reports|is experiencing)|astronaut (?:has|reports|is experiencing)|crew member (?:has|reports|is experiencing)|the patient (?:has|reports|is experiencing)|the astronaut (?:has|reports|is experiencing)|me duele|tengo|siento|me he lesionado|me lastim[eé])\b/.test(text);
+    const negatedOrHypothetical = /\b(?:what if|hypothetically|for example|if someone|if an astronaut|if the patient|i do not have|i don't have|i have no|i am not|i'm not|no symptoms|used to|previously|yesterday|resolved|gone now|no longer|stopped|no tengo|no me duele|no presenta|sin dolor|sin s[ií]ntomas)\b/.test(text);
+    if (!symptomCandidate || !bodyPart || !currentReport || negatedOrHypothetical) return false;
     const suggestion = suggestSymptomFromText(value);
-    const severe = /chest pain|chest pressure|difficulty breathing|shortness of breath|faint|passed out|sudden confusion|severe|rapidly worsening/.test(text);
+    const severe = /chest pain|chest pressure|difficulty breathing|shortness of breath|faint|passed out|sudden confusion|severe|rapidly worsening|dolor (?:intenso )?en el pecho|presi[oó]n en el pecho|me cuesta respirar|falta de aire|desmay|confusi[oó]n repentina|debilidad intensa|empeorando r[aá]pidamente|grave|muy fuerte/.test(text);
     addSymptomEntry({
       ...suggestion,
       severity: severe ? Math.max(8, suggestion.severity) : suggestion.severity,

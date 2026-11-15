@@ -10,7 +10,7 @@ const contentTypes = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': '
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true });
   try {
-    const context = await browser.newContext({ serviceWorkers: 'block', reducedMotion: 'reduce', viewport: { width: 1365, height: 900 } });
+    const context = await browser.newContext({ serviceWorkers: 'block', reducedMotion: process.env.VALMED_CAPTURE_SOLAR ? 'no-preference' : 'reduce', viewport: { width: 1365, height: 900 } });
     let chatRequests = 0;
     let ollamaUnavailable = false;
     await context.route('**/*', async (route) => {
@@ -81,7 +81,7 @@ const contentTypes = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': '
     await click('#solarReset');
     assert.equal(await loc('#planetName').innerText(), 'THE SUN');
     const solarMode = await loc('#solarCommand').evaluate((node) => node.classList.contains('solar-no-webgl') ? 'fallback' : 'three-webgl');
-    await page.waitForFunction(() => performance.getEntriesByType('resource').filter((entry) => /assets\/solar-textures\/2k_(sun|mercury|venus_surface|earth_daymap|mars|jupiter|saturn|uranus|neptune)\.jpg/.test(entry.name)).length === 9, null, { timeout: 15000 });
+    await page.waitForFunction(() => performance.getEntriesByType('resource').filter((entry) => /assets\/solar-textures\/2k_(sun|mercury|venus_surface|earth_daymap|moon|mars|jupiter|saturn|uranus|neptune)\.jpg/.test(entry.name)).length === 10, null, { timeout: 15000 });
     const solarMessage = await loc('#solarStatus').innerText();
     const solarError = await loc('#solarCommand').getAttribute('data-solar-error');
     if (process.env.VALMED_CAPTURE_SOLAR) await page.screenshot({ path: 'solar-command-preview.png' });

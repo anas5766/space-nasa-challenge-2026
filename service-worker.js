@@ -1,9 +1,9 @@
-const CACHE='valmed-health-assessment-v10';
+const CACHE='valmed-health-assessment-v11';
 const CORE=[
   '/index.html','/health.html','/anatomy.html',
   '/src/styles.css','/src/presentation.css','/src/visual-polish.css','/src/solar-command.css',
   '/src/site-shell.js','/src/page-clock.js','/src/solar-command.js','/src/solar-scene.js',
-  '/src/data/solar-navigation.mjs','/src/data/orbital-motion.mjs','/assets/vendor/three/three.module.js','/assets/vendor/three/three.core.js',
+  '/src/data/solar-navigation.mjs','/src/data/orbital-motion.mjs','/assets/vendor/three/three.module.js','/assets/vendor/three/three.core.js','/assets/vendor/three/examples/jsm/loaders/GLTFLoader.js','/assets/solar-models/hyg-stars.csv',
   '/assets/solar-textures/2k_sun.jpg','/assets/solar-textures/2k_mercury.jpg','/assets/solar-textures/2k_venus_surface.jpg',
   '/assets/solar-textures/2k_earth_daymap.jpg','/assets/solar-textures/2k_earth_clouds.jpg','/assets/solar-textures/2k_moon.jpg','/assets/solar-textures/2k_mars.jpg',
   '/assets/solar-textures/2k_jupiter.jpg','/assets/solar-textures/2k_saturn.jpg','/assets/solar-textures/2k_saturn_ring_alpha.png',

@@ -119,7 +119,7 @@ const SYMPTOM_HAZARDS = Object.freeze({
   muscle: ['gravity'],
   vision: ['radiation', 'environment'],
 });
-const URGENT_SYMPTOMS = new Set(['chest', 'breathing', 'fainting', 'confusion', 'rapid-worsening']);
+const URGENT_SYMPTOMS = new Set(['chest', 'breathing', 'fainting', 'confusion', 'weakness', 'rapid-worsening']);
 const DEFAULT_METRICS = Object.freeze([
   ['heartRate', 'Heart rate', 'bpm'],
   ['bloodPressure', 'Systolic blood pressure', 'mmHg'],
@@ -176,7 +176,9 @@ function validatedThresholds(thresholds, metricId, unit) {
 function currentSymptomsWithinWindow(symptoms, now, windowMs) {
   return (Array.isArray(symptoms) ? symptoms : []).filter((symptom) => {
     const at = validDate(symptom?.at);
-    return at !== null && at <= now && now - at <= windowMs;
+    const kind = String(symptom?.kind || 'other');
+    const zeroIntensityNonUrgent = numberOrNull(symptom?.severity) === 0 && !URGENT_SYMPTOMS.has(kind) && !['urgent', 'emergency'].includes(symptom?.protocolLevel);
+    return at !== null && at <= now && now - at <= windowMs && !zeroIntensityNonUrgent;
   });
 }
 

@@ -57,6 +57,19 @@ test('urgent symptom categories escalate without waiting for numeric thresholds'
   assert.match(result.recommendations[0], /emergency medical checklist/i);
 });
 
+
+test('zero-intensity non-urgent entries do not create an attention finding, while new severe weakness escalates', () => {
+  const noSymptom = evaluateHealthRisk({
+    symptoms: [{ kind: 'nausea', severity: 0, at: new Date(now - 1000).toISOString() }], now,
+  });
+  assert.equal(noSymptom.recentSymptomCount, 0);
+  assert.equal(noSymptom.overallState, 'unknown');
+  const weakness = evaluateHealthRisk({
+    symptoms: [{ kind: 'weakness', severity: 2, at: new Date(now - 1000).toISOString() }], now,
+  });
+  assert.equal(weakness.overallState, 'urgent');
+});
+
 test('unvalidated thresholds are ignored; validated thresholds require provenance and matching units', () => {
   const base = { readings: [{ id: 'heartRate', name: 'Heart rate', unit: 'bpm', value: 101 }], now };
   const unvalidated = evaluateHealthRisk({ ...base, thresholds: [{ metricId: 'heartRate', unit: 'bpm', direction: 'above', value: 100, level: 'urgent', validated: false, source: { name: 'Example', url: 'https://example.org' } }] });

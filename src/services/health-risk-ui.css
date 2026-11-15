@@ -75,3 +75,17 @@
 .risk-mission-prompts li + li { margin-top: 4px; }
 @media (max-width: 1050px) { .mission-context-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .mission-context-grid { grid-template-columns: 1fr; } .mission-context-footer { align-items: flex-start; flex-direction: column; } .mission-context-panel .panel-heading { display: flex; } }
+
+/* Synthetic mission demo: same VALMED panel, typography and accent system. */
+.mission-context-actions { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+.demo-mission-note { display:grid; gap:5px; margin:16px 0 0; padding:12px 14px; border:1px solid rgba(149,237,255,.18); border-radius:7px; background:rgba(149,237,255,.035); }
+.demo-mission-note strong { color:var(--accent,#95EDFF); font: .62rem var(--mono); letter-spacing:.1em; }
+.demo-mission-note span { color:var(--muted,#9aa8b8); font-size:.75rem; line-height:1.55; }
+@media(max-width:600px) { .mission-context-actions { width:100%; justify-content:space-between; } }
+
+/* Distinguish symptom history from signals used in the current 24-hour assessment. */
+.symptom-entry[data-review-state="historical"] { opacity: .72; }
+.symptom-entry[data-review-state="current"] > div > small:nth-of-type(2) { color: #8edfc0; }
+.symptom-entry[data-review-state="historical"] > div > small:nth-of-type(2) { color: var(--muted, #9aa8b8); }
+
+.risk-hazard-note { margin: 10px 0 0; color: var(--muted, #9aa8b8); font-size: .78rem; line-height: 1.55; }

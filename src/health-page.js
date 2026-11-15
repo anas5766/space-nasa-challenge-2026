@@ -1,11 +1,52 @@
 import { METRIC_DEFINITIONS, addSymptomEntry, announceHealthStateChange, metricStatus, readHealthHistory, readMetricLog, readSymptomLog, saveMetricLog, saveSymptomLog } from './health-state.js';
 import { evaluateHealthRisk } from './services/health-risk-engine.mjs';
 import { VALIDATED_THRESHOLDS } from './services/validated-thresholds.js';
+import { buildDemoMissionData, DEMO_MISSION_ID, isUntouchedLegacyDemo } from './data/demo-mission.mjs';
+import { selectRecentHistory } from './data/health-history.mjs';
 import './protocols/protocol-ui.js';
 
-announceHealthStateChange();
 const BASELINE_KEY = 'valmed-personal-reference-v1';
 const MISSION_CONTEXT_KEY = 'valmed-mission-context-v1';
+const DEMO_FLAG_KEY = 'valmed-demo-mission-150d-active';
+
+function installDemoMission({ force = false } = {}) {
+  const hasExistingData = ['orbital-metrics', 'orbital-history', 'orbital-symptoms', BASELINE_KEY, MISSION_CONTEXT_KEY].some((key) => {
+    try { const value = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(value) ? value.length > 0 : Boolean(value && Object.keys(value).length); } catch { return false; }
+  });
+  if (!force && hasExistingData) return false;
+  const demo = buildDemoMissionData();
+  localStorage.setItem('orbital-metrics', JSON.stringify(demo.metrics));
+  localStorage.setItem('orbital-history', JSON.stringify(demo.history));
+  localStorage.setItem('orbital-symptoms', JSON.stringify(demo.symptoms));
+  localStorage.setItem(BASELINE_KEY, JSON.stringify(demo.baseline));
+  localStorage.setItem(MISSION_CONTEXT_KEY, JSON.stringify(demo.missionContext));
+  localStorage.setItem(DEMO_FLAG_KEY, DEMO_MISSION_ID);
+  return true;
+}
+
+function migrateUntouchedLegacyDemo() {
+  try {
+    const parse = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); } catch { return fallback; } };
+    const flag = localStorage.getItem(DEMO_FLAG_KEY);
+    const snapshot = {
+      flag,
+      metrics: parse('orbital-metrics', []),
+      history: parse('orbital-history', []),
+      symptoms: parse('orbital-symptoms', []),
+      baseline: parse(BASELINE_KEY, null),
+      missionContext: parse(MISSION_CONTEXT_KEY, null),
+    };
+    if (!isUntouchedLegacyDemo(snapshot)) return false;
+    installDemoMission({ force: true });
+    return true;
+  } catch { return false; }
+}
+// A clean browser opens into the demo. Only an untouched previous demo seed is migrated; edited/user records are preserved.
+try {
+  if (!localStorage.getItem(DEMO_FLAG_KEY)) installDemoMission();
+  else migrateUntouchedLegacyDemo();
+} catch { /* Demo data is optional when storage is unavailable. */ }
+announceHealthStateChange();
 const riskStyle = document.createElement('link'); riskStyle.rel = 'stylesheet'; riskStyle.href = 'src/services/health-risk-ui.css'; document.head.append(riskStyle);
 
 const icons = { heartRate: '⌁', bloodPressure: '↕', bloodSugar: '◉', hydration: '◒', sleep: '☾', temperature: '♨', oxygen: '◉' };
@@ -60,12 +101,13 @@ function renderHealthRisk() {
   }).join('') : '<p class="risk-empty">No current findings. Save a measured check-in and record any symptoms to begin.</p>';
   const missing = result.missing.length ? `<details class="risk-missing"><summary>Missing measurements (${result.missing.length})</summary><p>${result.missing.map((item) => escapeHtml(item.label)).join(' · ')}</p></details>` : '';
   const recommendations = result.recommendations.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
-  const hazards = result.relatedHazards.length ? `<div class="risk-hazards"><span>HAZARD CONTEXT — NOT CAUSATION</span>${result.relatedHazards.map((item) => `<span>${escapeHtml(item.label)}</span>`).join('')}</div>` : '';
+  const symptomHazards = [...new Map(result.findings.filter((finding) => finding.type === 'symptom').flatMap((finding) => finding.relatedHazards || []).map((item) => [item.id, item])).values()];
+  const hazards = symptomHazards.length ? `<div class="risk-hazards"><span>CONTEXTUAL LINKS FOR REPORTED SYMPTOMS — NOT CAUSATION</span>${symptomHazards.map((item) => `<span>${escapeHtml(item.label)}</span>`).join('')}</div>` : '';
   const mission = result.missionContext;
   const missionValues = Object.entries(mission.values).filter(([, item]) => item !== null).map(([, item]) => `${item.label}: ${item.value} ${item.unit}`);
   const missionPrompts = [...mission.priorities, ...mission.notes.filter((note) => !mission.priorities.includes(note))].map((item) => `<li>${escapeHtml(item)}</li>`).join('');
-  const missionPanel = `<section class="risk-mission-summary"><div class="risk-mission-top"><div><span class="risk-kicker">ACTIVE MISSION CONTEXT</span><strong>${escapeHtml(mission.locationLabel)}</strong><small>${escapeHtml(mission.gravityLabel)}${mission.values.missionDay ? ` · Mission day ${mission.values.missionDay.value}` : ''}</small></div><span class="risk-state">${mission.hazards.length} HAZARD DOMAINS IN SCOPE</span></div><p>${escapeHtml(mission.caveat)}</p>${missionValues.length ? `<div class="risk-context-values">${missionValues.map((item) => `<span>${escapeHtml(item)}</span>`).join('')}</div>` : '<p class="risk-empty">No environmental or operational telemetry entered yet.</p>'}<details class="risk-mission-prompts" open><summary>What matters in this environment?</summary><ul>${missionPrompts}</ul></details><details class="risk-mission-prompts"><summary>Mission data gaps (${mission.missing.length})</summary><ul>${mission.missing.map((item) => `<li>${escapeHtml(item.label)} — not entered</li>`).join('')}</ul></details></section>`;
-  host.innerHTML = `<div class="risk-overview" data-state="${escapeHtml(result.overallState)}"><div><span class="risk-kicker">ENGINE ${escapeHtml(result.engineVersion)}</span><strong>${escapeHtml(stateLabel)}</strong></div><p>${escapeHtml(result.summary)}</p></div>${missionPanel}<div class="risk-columns"><div><h3>Why this result?</h3><div class="risk-findings">${findings}</div>${missing}</div><aside class="risk-recommendations"><h3>Suggested next steps</h3><ul>${recommendations}</ul></aside></div>${hazards}<details class="risk-hazard-context"><summary>How the five spaceflight hazards relate to this assessment</summary><div class="risk-hazard-grid">${result.hazardContext.map((hazard) => `<article><strong>${escapeHtml(hazard.label)}</strong><p>${escapeHtml(hazard.relevance)}</p><small>${hazard.indicators.map(escapeHtml).join(' · ')}</small></article>`).join('')}</div></details><details class="risk-limitations"><summary>Method, evidence and limitations</summary><ul>${result.limitations.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul><p>NASA context: <a href="https://www.nasa.gov/hrp/hazards/" target="_blank" rel="noopener">Five Hazards of Human Spaceflight</a> · <a href="https://www.nasa.gov/ochmo/health-and-medical-systems/in-flight-medical-care/" target="_blank" rel="noopener">NASA in-flight medical care</a>.</p></details>`;
+  const missionPanel = `<section class="risk-mission-summary"><div class="risk-mission-top"><div><span class="risk-kicker">ACTIVE MISSION CONTEXT</span><strong>${escapeHtml(mission.locationLabel)}</strong><small>${escapeHtml(mission.gravityLabel)}${mission.values.missionDay ? ` · Mission day ${mission.values.missionDay.value}` : ''}</small></div><span class="risk-state">${mission.hazards.length} MISSION DOMAINS IN SCOPE</span></div><p>${escapeHtml(mission.caveat)} The five hazard domains are mission context, separate from the symptoms reported by the crew.</p>${missionValues.length ? `<div class="risk-context-values">${missionValues.map((item) => `<span>${escapeHtml(item)}</span>`).join('')}</div>` : '<p class="risk-empty">No environmental or operational telemetry entered yet.</p>'}<details class="risk-mission-prompts" open><summary>What matters in this environment?</summary><ul>${missionPrompts}</ul></details><details class="risk-mission-prompts"><summary>Mission data gaps (${mission.missing.length})</summary><ul>${mission.missing.map((item) => `<li>${escapeHtml(item.label)} — not entered</li>`).join('')}</ul></details></section>`;
+  host.innerHTML = `<div class="risk-overview" data-state="${escapeHtml(result.overallState)}"><div><span class="risk-kicker">ENGINE ${escapeHtml(result.engineVersion)}</span><strong>${escapeHtml(stateLabel)}</strong></div><p>${escapeHtml(result.summary)}</p></div>${missionPanel}<div class="risk-columns"><div><h3>Why this result?</h3><div class="risk-findings">${findings}</div>${missing}</div><aside class="risk-recommendations"><h3>Suggested next steps</h3><ul>${recommendations}</ul></aside></div>${hazards}<details class="risk-hazard-context"><summary>Five mission hazard domains in scope · not symptom diagnoses</summary><p class="risk-hazard-note">These domains come from the selected mission profile. They describe what the crew should monitor; they are not evidence that a logged symptom was caused by a hazard and they do not create a 3D body alert.</p><div class="risk-hazard-grid">${result.hazardContext.map((hazard) => `<article><strong>${escapeHtml(hazard.label)}</strong><p>${escapeHtml(hazard.relevance)}</p><small>${hazard.indicators.map(escapeHtml).join(' · ')}</small></article>`).join('')}</div></details><details class="risk-limitations"><summary>Method, evidence and limitations</summary><ul>${result.limitations.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul><p>NASA context: <a href="https://www.nasa.gov/hrp/hazards/" target="_blank" rel="noopener">Five Hazards of Human Spaceflight</a> · <a href="https://www.nasa.gov/ochmo/health-and-medical-systems/in-flight-medical-care/" target="_blank" rel="noopener">NASA in-flight medical care</a>.</p></details>`;
   const setButton = document.getElementById('setHealthBaseline');
   const clearButton = document.getElementById('clearHealthBaseline');
   if (setButton) { setButton.disabled = !hasSavedReadings; setButton.textContent = baseline ? 'Update personal reference' : 'Set personal reference'; }
@@ -86,7 +128,7 @@ function render({ persist = false } = {}) {
 
 function renderChart() {
   const id = document.getElementById('healthChartMetric').value; const metric = readings.find((m) => m.id === id);
-  const values = history.slice(0, 12).reverse().filter((entry) => Number.isFinite(Number(entry.readings?.[id])));
+  const values = selectRecentHistory(history, id, 12);
   document.getElementById('healthChartValue').innerHTML = `${nice(metric.value)} <small>${metric.unit}</small>`;
   const graph = document.getElementById('healthChart');
   if (!values.length) { graph.innerHTML = '<span class="history-empty">Save a check-in to start your personal trend.</span>'; document.getElementById('healthDates').replaceChildren(); document.getElementById('healthEntries').replaceChildren(); return; }
@@ -101,8 +143,8 @@ function renderSymptoms() {
   const choices = [['headache', 'Headache or dizziness'], ['chest', 'Chest pain or pressure'], ['breathing', 'Difficulty breathing'], ['nausea', 'Nausea'], ['muscle', 'Weakness or muscle pain'], ['vision', 'Vision changes']];
   document.getElementById('symptomChips').innerHTML = choices.map(([id, label]) => `<button class="symptom-chip" type="button" data-symptom="${id}"><i></i>${label}</button>`).join('');
   document.getElementById('symptomCount').textContent = symptoms.length ? `${symptoms.length} ENTRIES` : 'NO ENTRIES';
-  document.getElementById('symptomList').innerHTML = symptoms.slice(0, 5).map((entry, index) => `<article class="symptom-entry"><span class="symptom-entry-mark">${index === 0 ? '✳' : '·'}</span><div><strong>${symptomLabels[entry.kind] || escapeHtml(entry.kind)}</strong><small>${regionLabels[entry.region] || escapeHtml(entry.region)} · Intensity ${entry.severity}/10 · ${new Date(entry.at).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })}</small>${entry.note ? `<p>${escapeHtml(entry.note)}</p>` : ''}</div><button type="button" data-remove-symptom="${index}" aria-label="Remove symptom">×</button></article>`).join('') || '<p class="symptom-empty">No symptoms logged. Add an observation to include it in a crew report.</p>';
-  document.getElementById('symptomChips').querySelectorAll('[data-symptom]').forEach((button) => button.addEventListener('click', () => { document.querySelector('#symptomForm [name="kind"]').value = button.dataset.symptom; document.getElementById('symptomDialog').showModal(); }));
+  document.getElementById('symptomList').innerHTML = symptoms.slice(0, 5).map((entry, index) => { const age = Date.now() - Date.parse(entry.at || ''); const inReviewWindow = Number.isFinite(age) && age >= 0 && age < 24 * 60 * 60 * 1000; const reviewLabel = inReviewWindow ? 'IN CURRENT 24 H REVIEW' : 'HISTORICAL · NOT IN CURRENT ASSESSMENT'; return `<article class="symptom-entry" data-review-state="${inReviewWindow ? 'current' : 'historical'}"><span class="symptom-entry-mark">${index === 0 ? '✳' : '·'}</span><div><strong>${symptomLabels[entry.kind] || escapeHtml(entry.kind)}</strong><small>${regionLabels[entry.region] || escapeHtml(entry.region)} · Intensity ${entry.severity}/10 · ${new Date(entry.at).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })}</small><small>${reviewLabel}</small>${entry.note ? `<p>${escapeHtml(entry.note)}</p>` : ''}</div><button type="button" data-remove-symptom="${index}" aria-label="Remove symptom">×</button></article>`; }).join('') || '<p class="symptom-empty">No symptoms logged. Add an observation to include it in a crew report.</p>';
+  document.getElementById('symptomChips').querySelectorAll('[data-symptom]').forEach((button) => button.addEventListener('click', () => { const kind = button.dataset.symptom; document.querySelector('#symptomForm [name="kind"]').value = kind; const suggestedRegion = { headache: 'head', chest: 'chest', breathing: 'chest', nausea: 'abdomen', vision: 'head' }[kind] || 'general'; document.querySelector('#symptomForm [name="region"]').value = suggestedRegion; document.getElementById('symptomDialog').showModal(); }));
   document.getElementById('symptomList').querySelectorAll('[data-remove-symptom]').forEach((button) => button.addEventListener('click', () => { symptoms.splice(Number(button.dataset.removeSymptom), 1); symptoms = saveSymptomLog(symptoms); renderSymptoms(); renderHealthRisk(); }));
 }
 
@@ -114,10 +156,27 @@ document.getElementById('clearHealthBaseline').addEventListener('click', () => {
 document.getElementById('healthChartMetric').addEventListener('change', renderChart);
 document.getElementById('symptomAdd').addEventListener('click', () => document.getElementById('symptomDialog').showModal());
 document.getElementById('symptomForm').addEventListener('submit', (event) => { if (event.submitter?.value === 'cancel') return; event.preventDefault(); const data = new FormData(event.currentTarget); symptoms = addSymptomEntry({ kind: data.get('kind'), region: data.get('region'), severity: Number(data.get('severity')), note: String(data.get('note') || '').slice(0, 160), at: new Date().toISOString(), source: 'health-check-in' }); document.getElementById('symptomDialog').close(); renderSymptoms(); renderHealthRisk(); toast('Observation added to the shared health record.'); });
-document.getElementById('healthReport').addEventListener('click', async () => { const contextLines = Object.entries(missionContext).filter(([key, value]) => value !== '' && value !== null && value !== undefined && !['location', 'gravity'].includes(key)).map(([key, value]) => `- ${key}: ${value}`); const text = ['Valmed · CREW HEALTH SUMMARY', new Date().toLocaleString('en-US'), '', `Mission location: ${missionContext.location || 'earth'}`, `Gravity environment: ${missionContext.gravity || 'earth'}`, 'Mission and environmental context:', ...(contextLines.length ? contextLines : ['- No additional mission telemetry entered']), '', 'Current readings:', ...readings.map((m) => `- ${m.name}: ${nice(m.value)} ${m.unit}`), '', 'Recent symptoms:', ...(symptoms.length ? symptoms.slice(0, 5).map((s) => `- ${symptomLabels[s.kind] || s.kind}, ${regionLabels[s.region] || s.region}, intensity ${s.severity}/10${s.note ? ` — ${s.note}` : ''}`) : ['- None logged']), '', 'Entered data only; not a diagnosis.'].join('\n'); try { await navigator.clipboard.writeText(text); toast('Report copied to clipboard.'); } catch { const area = document.createElement('textarea'); area.value = text; document.body.append(area); area.select(); document.execCommand('copy'); area.remove(); toast('Report copied.'); } });
+document.getElementById('healthReport').addEventListener('click', async () => {
+  const contextLines = Object.entries(missionContext).filter(([key, value]) => value !== '' && value !== null && value !== undefined && !['location', 'gravity'].includes(key)).map(([key, value]) => `- ${key}: ${value}`);
+  const now = Date.now();
+  const inCurrentWindow = (item) => { const age = now - Date.parse(item.at || ''); return Number.isFinite(age) && age >= 0 && age < 24 * 60 * 60 * 1000; };
+  const currentSymptoms = symptoms.filter(inCurrentWindow).slice(0, 5);
+  const historicalSymptoms = symptoms.filter((item) => !inCurrentWindow(item)).slice(0, 5);
+  const symptomLine = (s) => `- ${symptomLabels[s.kind] || s.kind}, ${regionLabels[s.region] || s.region}, intensity ${s.severity}/10${s.note ? ` — ${s.note}` : ''}`;
+  const text = ['Valmed · CREW HEALTH SUMMARY', new Date().toLocaleString('en-US'), '', `Mission location: ${missionContext.location || 'earth'}`, `Gravity environment: ${missionContext.gravity || 'earth'}`, 'Mission and environmental context:', ...(contextLines.length ? contextLines : ['- No additional mission telemetry entered']), '', 'Current readings:', ...(hasSavedReadings ? readings.filter((m) => savedMetricIds.has(m.id)).map((m) => `- ${m.name}: ${nice(m.value)} ${m.unit}`) : ['- No saved measurements; dashboard values are examples only.']), '', 'Symptoms in current 24-hour assessment window:', ...(currentSymptoms.length ? currentSymptoms.map(symptomLine) : ['- None']), '', 'Historical symptom entries (not included in current assessment):', ...(historicalSymptoms.length ? historicalSymptoms.map(symptomLine) : ['- None']), '', 'Entered data only; not a diagnosis.'].join('\n');
+  try { await navigator.clipboard.writeText(text); toast('Report copied to clipboard.'); }
+  catch { const area = document.createElement('textarea'); area.value = text; document.body.append(area); area.select(); document.execCommand('copy'); area.remove(); toast('Report copied.'); }
+});
 document.getElementById('healthExport').addEventListener('click', () => { const csv = [['date', ...defs.map((d) => `${d[1]} (${d[2]})`)], ...history.map((entry) => [entry.at, ...defs.map((d) => entry.readings?.[d[0]] ?? '')])].map((row) => row.join(',')).join('\n'); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'valmed-health-history.csv'; a.click(); URL.revokeObjectURL(a.href); });
 
 const missionForm = document.getElementById('missionContextForm');
+const loadDemoButton = document.getElementById('loadDemoMission');
+if (loadDemoButton) loadDemoButton.addEventListener('click', () => {
+  const hasData = ['orbital-metrics', 'orbital-history', 'orbital-symptoms', BASELINE_KEY, MISSION_CONTEXT_KEY].some((key) => { try { const value = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(value) ? value.length > 0 : Boolean(value && Object.keys(value).length); } catch { return false; } });
+  if (hasData && !window.confirm('Replace the health records currently stored in this browser with the synthetic 150-day lunar mission demo? Export any records you need first.')) return;
+  try { installDemoMission({ force: true }); window.location.reload(); }
+  catch { toast('Could not load the demo mission in this browser.'); }
+});
 if (missionForm) {
   for (const [key, value] of Object.entries(missionContext)) { if (missionForm.elements[key]) missionForm.elements[key].value = value; }
   if (!missionContext.gravity && missionForm.elements.gravity) missionForm.elements.gravity.value = ({ earth: 'earth', leo: 'microgravity', iss: 'microgravity', transit: 'microgravity', lunar_orbit: 'microgravity', lunar_surface: 'lunar' })[missionForm.elements.location.value] || 'unknown';
@@ -137,7 +196,7 @@ if (missionForm) {
 }
 
 window.addEventListener('storage', (event) => {
-  if (event.key !== null && !['orbital-metrics', 'orbital-symptoms', 'orbital-history', BASELINE_KEY, MISSION_CONTEXT_KEY].includes(event.key)) return;
+  if (event.key !== null && !['orbital-metrics', 'orbital-symptoms', 'orbital-history', BASELINE_KEY, MISSION_CONTEXT_KEY, DEMO_FLAG_KEY].includes(event.key)) return;
   const latest = readMetricLog();
   hasSavedReadings = latest.length > 0;
   savedMetricIds = new Set(latest.map((item) => item.id));

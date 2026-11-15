@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { anatomySymptomLevel, symptomsForAnatomyStructure } from './anatomy-health-map.mjs';
 
 const MODELS = {
   male: 'https://cdn.jsdelivr.net/npm/open-anatomy-3d@0.1.0/models/anatomy-male.glb',
@@ -9,7 +10,6 @@ const MODELS = {
 };
 const COLORS = { normal: '#32d69a', warning: '#f1d35a', moderate: '#ff963f', critical: '#fb5563' };
 const STRUCTURE_GROUPS = new Set(['skin', 'skeleton', 'muscles', 'organs', 'vessels', 'nerves', 'lymphatics', 'fascia', 'cartilage', 'ligaments']);
-const PRIORITY_SYMPTOMS = new Set(['chest', 'breathing', 'fainting', 'confusion', 'weakness', 'rapid-worsening']);
 const PRIVATE_STRUCTURE = /genital|penis|scrot|testis|testicle|vulva|vagin|clitoris|labia|perineum/i;
 const LAYER_OPACITY = { skeleton: 0.58, muscles: 0.34, organs: 0.74, vessels: 0.62, nerves: 0.72, lymphatics: 0.66, fascia: 0.32, cartilage: 0.58, ligaments: 0.48 };
 export function mountAnatomyViewer(container, { onSelect = () => {} } = {}) {
@@ -160,73 +160,22 @@ export function mountAnatomyViewer(container, { onSelect = () => {} } = {}) {
     return key.replace(/_(l|r)$/i, (part) => part.toLowerCase() === '_l' ? ' · left' : ' · right')
       .replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
   }
-  function regionForKey(key) {
-    const name = key.toLowerCase();
-    if (/brain|eye|optic|skull|cranium|head|face|ear|nose|mouth|jaw/.test(name)) return 'head';
-    if (/heart|lung|bronch|trachea|rib|sternum|chest|aorta|arter|vein|diaphragm/.test(name)) return 'chest';
-    if (/kidney|renal|liver|stomach|pancrea|intestin|spleen|bladder|ureter|abdomen/.test(name)) return 'abdomen';
-    if (/spine|vertebra|back|latissimus|trapezius/.test(name)) return 'back';
-    if (/humerus|ulna|radius|biceps|triceps|deltoid|forearm|carpal|hand|metacarpal|phalange|wrist|shoulder|arm|pectoral/.test(name)) return 'arm';
-    if (/femur|tibia|fibula|quadricep|hamstring|glute|patella|tarsal|foot|ankle|leg|calf|gastrocnemius|soleus|thigh/.test(name)) return 'leg';
-    return null;
-  }
   function riskFor(key) {
-    const name = key.toLowerCase();
-    const buckets = [];
-    if (/heart|aorta|arter|vein|cardiac/.test(name)) buckets.push('heartRate', 'bloodPressure');
-    if (/kidney|renal|bladder|ureter/.test(name)) buckets.push('hydration');
-    if (/brain|eye|optic|nerve/.test(name)) buckets.push('sleep', 'mood', 'vision');
-    if (/muscle|psoas|quadricep|hamstring|glute|bicep|tricep|deltoid|pector|latissimus|trapezius|gastrocnemius|soleus|sartorius|adductor/.test(name)) buckets.push('sleep', 'muscleStatus');
-    if (/bone|femur|femoral|tibia|fibula|vertebra|spine|rib|humer|ulna|radius|pelvis|patella|clavicle|scapula|skull|cranium|sternum|phalange|metacarp|metatars|carpal|tarsal|sacrum|coccyx|mandible|maxilla/.test(name)) buckets.push('boneStatus');
-    if (/liver|stomach|pancrea|intestin|spleen/.test(name)) buckets.push('bloodSugar');
-    if (/lung|bronch|trachea/.test(name)) buckets.push('oxygen');
-    if (/skin|epiderm/.test(name)) buckets.push('temperature');
-    const levels = { normal: 0, warning: 1, moderate: 2, critical: 3 };
-    const scores = buckets.map((bucket) => healthMap[bucket]).filter(Boolean);
-    const region = regionForKey(key);
-    if (region) {
-      scores.push(healthMap.bodyRegions?.[region]);
-      (healthMap.currentSymptoms || []).filter((item) => item.region === region)
-        .forEach((item) => scores.push(PRIORITY_SYMPTOMS.has(item.kind) ? 'critical' : item.status));
-    }
-    return scores.filter(Boolean).sort((a, b) => levels[b] - levels[a])[0] || 'normal';
-  }
-  function linkedStructure(key) {
-    return /heart|aorta|arter|vein|cardiac|kidney|renal|bladder|ureter|brain|eye|optic|nerve|muscle|psoas|quadricep|hamstring|glute|bicep|tricep|deltoid|pector|latissimus|trapezius|gastrocnemius|soleus|sartorius|adductor|bone|femur|femoral|tibia|fibula|vertebra|spine|rib|humer|ulna|radius|pelvis|patella|clavicle|scapula|sternum|phalange|metacarp|metatars|carpal|tarsal|sacrum|coccyx|mandible|maxilla|liver|stomach|pancrea|intestin|spleen|lung|bronch|trachea|skin|epiderm/.test(key.toLowerCase());
-  }
-  function linkedMetricIds(key) {
-    const name = key.toLowerCase();
-    const ids = [];
-    if (/heart|aorta|arter|vein|cardiac/.test(name)) ids.push('heartRate', 'bloodPressure');
-    if (/kidney|renal|bladder|ureter/.test(name)) ids.push('hydration');
-    if (/brain|eye|optic|nerve/.test(name)) ids.push('sleep');
-    if (/liver|stomach|pancrea|intestin|spleen/.test(name)) ids.push('bloodSugar');
-    if (/lung|bronch|trachea/.test(name)) ids.push('oxygen');
-    if (/skin|epiderm/.test(name)) ids.push('temperature');
-    return [...new Set(ids)];
+    return anatomySymptomLevel(key, healthMap.currentSymptoms || []);
   }
   function issueFor(key, level) {
-    const levels = { normal: 0, warning: 1, moderate: 2, critical: 3 };
-    const region = regionForKey(key);
     const symptomLabels = {
-      chest: 'Chest pain or pressure', breathing: 'Difficulty breathing', fainting: 'Fainting / loss of consciousness',
-      confusion: 'Sudden confusion', weakness: 'Severe new weakness', 'rapid-worsening': 'Rapidly worsening symptoms',
-      headache: 'Headache or dizziness', muscle: 'Muscle pain or weakness', vision: 'Vision changes', nausea: 'Nausea', other: 'Reported symptom',
+      headache: 'Headache or dizziness', chest: 'Chest pain or pressure', breathing: 'Difficulty breathing',
+      fainting: 'Fainting / loss of consciousness', confusion: 'Sudden confusion', weakness: 'Severe new weakness',
+      'rapid-worsening': 'Rapidly worsening symptoms', muscle: 'Weakness or muscle pain', nausea: 'Nausea',
+      vision: 'Vision changes', other: 'Reported symptom',
     };
-    const symptoms = (healthMap.currentSymptoms || [])
-      .filter((item) => region && item.region === region && (item.status !== 'normal' || PRIORITY_SYMPTOMS.has(item.kind)))
-      .slice(0, 1)
+    const symptoms = symptomsForAnatomyStructure(key, healthMap.currentSymptoms || [])
+      .slice(0, 3)
       .map((item) => `${symptomLabels[item.kind] || 'Reported symptom'} · intensity ${item.severity}/10`);
-    const readings = linkedMetricIds(key)
-      .map((id) => healthMap.readings?.find((item) => item.id === id && item.status !== 'normal'))
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((item) => `${item.name}: ${item.value} ${item.unit} · ${item.status.toUpperCase()}`);
-    const signals = [...symptoms, ...readings];
-    if (signals.length) return signals.join('  /  ');
-    return level === 'normal'
-      ? 'No linked concern in recent check-ins.'
-      : 'A related system indicator is flagged in the health log.';
+    return symptoms.length
+      ? symptoms.join('  /  ')
+      : level === 'normal' ? 'No recent, location-matched symptom is recorded.' : 'A recent symptom is mapped to this body area.';
   }
   function updateCalloutPosition() {
     if (!calloutLayer || !calloutCard || !selected || !modelRoot || !selectedAnchorWorld) return;
@@ -311,7 +260,7 @@ export function mountAnatomyViewer(container, { onSelect = () => {} } = {}) {
       empty.textContent = !all.length
         ? 'Waiting for the anatomy model…'
         : flaggedOnly && !query
-          ? 'No body areas are currently flagged by entered readings or recent symptoms.'
+          ? 'No structures currently match a recent, localized symptom.'
           : 'No matching body structures. Try another search.';
       directoryList.append(empty);
       return;
@@ -374,7 +323,7 @@ export function mountAnatomyViewer(container, { onSelect = () => {} } = {}) {
       const originalList = Array.isArray(originals) ? originals : [originals];
       materials.forEach((material, index) => {
         const base = originalList[index] || originalList[0];
-        if (level === 'normal' && !linkedStructure(key)) {
+        if (level === 'normal') {
           material.color.copy(base.color);
           if (material.emissive) material.emissive.set('#000000');
           return;
@@ -400,23 +349,12 @@ export function mountAnatomyViewer(container, { onSelect = () => {} } = {}) {
     const label = labelFor(key);
     const safeLabel = label.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
     const stateLabels = { normal: 'STABLE', warning: 'ATTENTION', moderate: 'MODERATE ALERT', critical: 'HIGH ALERT' };
-    const name = key.toLowerCase();
-    const indicators = [];
-    if (/heart|aorta|arter|vein|cardiac/.test(name)) indicators.push('heart rate', 'blood pressure');
-    if (/kidney|renal|bladder|ureter/.test(name)) indicators.push('hydration');
-    if (/brain|eye|optic|nerve/.test(name)) indicators.push('sleep', 'vision');
-    if (/muscle|psoas|quadricep|hamstring|glute|bicep|tricep|deltoid|pector|latissimus|trapezius|gastrocnemius|soleus|sartorius|adductor/.test(name)) indicators.push('sleep');
-    if (/bone|femur|femoral|tibia|fibula|vertebra|spine|rib|humer|ulna|radius|pelvis|patella|clavicle|scapula|skull|cranium|sternum|phalange|metacarp|metatars|carpal|tarsal|sacrum|coccyx|mandible|maxilla/.test(name) && healthMap.boneStatus) indicators.push('bone health');
-    if (/liver|stomach|pancrea|intestin|spleen/.test(name)) indicators.push('blood sugar');
-    if (/lung|bronch|trachea/.test(name)) indicators.push('blood oxygen');
-    if (/skin|epiderm/.test(name)) indicators.push('temperature');
-    const region = regionForKey(key);
-    if (region && healthMap.bodyRegions?.[region]) indicators.push(`recent ${region} symptom`);
-    const linked = [...new Set(indicators)];
+    const linkedSymptoms = symptomsForAnatomyStructure(key, healthMap.currentSymptoms || []);
+    const linked = linkedSymptoms.map((item) => `${item.kind} (${item.severity}/10)`);
     const explanation = level === 'normal'
-      ? 'No linked reading or symptom log currently flags this area.'
-      : 'Color reflects an entered reading or a recent, user-confirmed symptom in a related body region.';
-    details.innerHTML = `<span class="anatomy-risk ${level}"><i></i>${stateLabels[level]}</span><strong>${safeLabel}</strong><small>${explanation}${linked.length ? ` Linked indicators: ${linked.join(', ')}.` : ''} Illustrative only; not a diagnosis.</small><a class="anatomy-ask-link" href="assistant.html?structure=${encodeURIComponent(key)}">Ask Valmed about this area ↗</a>`;
+      ? 'No recent user-reported symptom is mapped to this structure.'
+      : 'Color reflects a recent user-reported symptom and its selected body area; it does not imply that this structure caused the symptom.';
+    details.innerHTML = `<span class="anatomy-risk ${level}"><i></i>${stateLabels[level]}</span><strong>${safeLabel}</strong><small>${explanation}${linked.length ? ` Reported symptom: ${linked.join(', ')}.` : ''} Mission hazards and general vital-sign trends are not mapped to anatomy. Illustrative only; not a diagnosis.</small><a class="anatomy-ask-link" href="assistant.html?structure=${encodeURIComponent(key)}">Ask Valmed about this area ↗</a>`;
     if (calloutLayer && calloutCard) {
       calloutLayer.hidden = !selectedAnchorWorld;
       calloutCard.dataset.level = level;
@@ -458,13 +396,10 @@ export function mountAnatomyViewer(container, { onSelect = () => {} } = {}) {
   }
   function focusFirstAffectedStructure() {
     const severity = { warning: 1, moderate: 2, critical: 3 };
-    const recentRegions = [...(healthMap.currentSymptoms || [])]
-      .filter((item) => item.status !== 'normal')
-      .sort((a, b) => (severity[b.status] || 0) - (severity[a.status] || 0) || Date.parse(b.at || 0) - Date.parse(a.at || 0))
-      .map((item) => item.region);
-    const structures = [...structureIndex.values()].filter((part) => riskFor(part.key) !== 'normal');
-    const priority = recentRegions.map((region) => structures.find((part) => regionForKey(part.key) === region)).find(Boolean);
-    const part = priority || structures[0];
+    const structures = [...structureIndex.values()]
+      .filter((part) => riskFor(part.key) !== 'normal')
+      .sort((a, b) => (severity[riskFor(b.key)] || 0) - (severity[riskFor(a.key)] || 0));
+    const part = structures[0];
     if (part) focusStructure(part.key, { automatic: true });
     return Boolean(part);
   }

@@ -16,6 +16,7 @@ const MODEL_FILES = {
 };
 const MAIN_BODY_IDS = ['sun','mercury','venus','earth','mars','jupiter','saturn','uranus','neptune'];
 const SATELLITES_BY_PARENT = { earth:['moon'], jupiter:['io','europa','ganymede','callisto'], saturn:['titan'] };
+const SKY_DRIFT_RATE = .0032; // Cinematic accelerated drift; the sky is not an ephemeris.
 
 function makeMap(THREE, body) {
   const canvas = document.createElement('canvas');
@@ -274,7 +275,7 @@ export function mountSolarScene(THREE, { canvas, bodies, onSelect, onHover, onSt
   for(const [id,entry] of entries)entry.sphere.userData.bodyId=entry.parent||id;
   let selectedId='sun';let overviewMode=true;let hoveredId=null;let dragging=null;let lastPointer=null;let targetGoal=target.clone();let cameraGoal=new THREE.Vector3();let transitionStarted=0;let transitionDuration=0;let startCamera=camera.position.clone();let startTarget=target.clone();
   function focus(id,{instant=false}={}){
-    const entry=entries.get(id);if(!entry)return;selectedId=id;overviewMode=id==='sun'&&instant;loadBodyTexture(id);loadBodyModel(id,{priority:true});loadSatelliteModelsFor(id);
+    const entry=entries.get(id);if(!entry)return;selectedId=id;overviewMode=id==='sun';loadBodyTexture(id);loadBodyModel(id,{priority:true});loadSatelliteModelsFor(id);
     const world=new THREE.Vector3();entry.sphere.getWorldPosition(world);
     const overview=overviewMode;const distance=overview?22:id==='sun'?10.5:THREE.MathUtils.clamp(entry.body.radius*10,3.2,12);
     const offset=new THREE.Vector3(0,distance*.24,distance);
@@ -283,13 +284,14 @@ export function mountSolarScene(THREE, { canvas, bodies, onSelect, onHover, onSt
       const viewForward=offset.clone().negate().normalize();const viewRight=new THREE.Vector3().crossVectors(viewForward,camera.up).normalize();
       targetGoal.copy(world).addScaledVector(viewRight,Math.min(3.7,distance*.14));
     }else targetGoal.set(world.x+Math.min(3.7,distance*.14),world.y,world.z);
+    offset.setLength(distance);
     cameraDistance=distance;zoom=cameraDistance/22;
     cameraGoal.copy(targetGoal).add(offset);
     startCamera.copy(camera.position);startTarget.copy(target);transitionStarted=performance.now();transitionDuration=instant||matchMedia('(prefers-reduced-motion: reduce)').matches?1:1050;
     onSelect(id);
   }
   let zoom=1;
-  function resize(){const rect=canvas.getBoundingClientRect();const width=Math.max(1,rect.width),height=Math.max(1,rect.height);renderer.setSize(width,height,false);camera.aspect=width/height;camera.fov=width<740?49:43;camera.position.z=cameraDistance;camera.updateProjectionMatrix();}
+  function resize(){const rect=canvas.getBoundingClientRect();const width=Math.max(1,rect.width),height=Math.max(1,rect.height);renderer.setSize(width,height,false);camera.aspect=width/height;camera.fov=width<740?49:43;camera.updateProjectionMatrix();}
   resize();const resizeObserver=new ResizeObserver(resize);resizeObserver.observe(canvas);
 
   const interactionEvents=new AbortController();
@@ -304,14 +306,26 @@ export function mountSolarScene(THREE, { canvas, bodies, onSelect, onHover, onSt
   canvas.addEventListener('pointerup',(event)=>{if(dragging&&dragging.id===event.pointerId){if(dragging.moved<7){const id=hitTest(event);if(id)focus(id);}dragging=null;}},{signal:interactionEvents.signal});
   canvas.addEventListener('pointercancel',()=>{dragging=null;},{signal:interactionEvents.signal});
   canvas.addEventListener('contextmenu',(event)=>event.preventDefault(),{signal:interactionEvents.signal});
-  canvas.addEventListener('wheel',(event)=>{event.preventDefault();cameraDistance=Math.max(2.5,Math.min(38,cameraDistance+event.deltaY*.012));zoom=cameraDistance/22;},{passive:false,signal:interactionEvents.signal});
+  canvas.addEventListener('wheel',(event)=>{
+    event.preventDefault();
+    const deltaScale=event.deltaMode===1?16:event.deltaMode===2?canvas.clientHeight:1;
+    const nextDistance=Math.max(2.5,Math.min(38,cameraDistance+event.deltaY*deltaScale*.012));
+    // Scrolling outward from a focused body should restore the whole system,
+    // including its planets, instead of only moving the camera along world Z.
+    if(!overviewMode&&event.deltaY>0&&nextDistance>=18){focus('sun');return;}
+    cameraDistance=nextDistance;zoom=cameraDistance/22;
+    const direction=camera.position.clone().sub(target).normalize();
+    if(direction.lengthSq()<.001)direction.set(0,.24,1).normalize();
+    targetGoal.copy(target);cameraGoal.copy(targetGoal).addScaledVector(direction,cameraDistance);
+    startCamera.copy(camera.position);startTarget.copy(target);transitionStarted=performance.now();transitionDuration=matchMedia('(prefers-reduced-motion: reduce)').matches?1:220;
+  },{passive:false,signal:interactionEvents.signal});
   canvas.addEventListener('webglcontextlost',(event)=>{event.preventDefault();cancelAnimationFrame(frame);window.dispatchEvent(new CustomEvent('valmed:solar-fallback'));},{signal:interactionEvents.signal});
 
   const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');let frame=0;let previous=performance.now();
   function animate(time){if(disposed)return;frame=requestAnimationFrame(animate);if(document.hidden){previous=time;return;}const dt=Math.min((time-previous)/1000,.05);previous=time;
     const motionAllowed=!reducedMotion.matches;
     const overview=overviewMode;
-    if(motionAllowed){stars.rotation.y+=dt*.0007;galaxy.rotation.y+=dt*.00008;if(overview)system.rotation.y+=dt*.00024;}
+    if(motionAllowed){stars.rotation.y+=dt*SKY_DRIFT_RATE;galaxy.rotation.y+=dt*SKY_DRIFT_RATE;if(overview)system.rotation.y+=dt*.00024;}
     glow.visible=selectedId==='sun';
     for(const [id,line] of planetaryOrbitLines)line.visible=overview;
     for(const [id,entry] of entries){
@@ -327,7 +341,12 @@ export function mountSolarScene(THREE, { canvas, bodies, onSelect, onHover, onSt
     for(const streak of shootingStars){if(!motionAllowed){streak.line.visible=false;streak.head.visible=false;continue;}if(streak.wait>0){streak.wait-=dt;continue;}streak.progress+=dt/streak.duration;if(streak.progress>=1){resetShootingStar(streak);continue;}const tailProgress=Math.max(0,streak.progress-.2);streak.headPosition.lerpVectors(streak.start,streak.end,streak.progress);streak.tailPosition.lerpVectors(streak.start,streak.end,tailProgress);const attribute=streak.geometry.attributes.position;attribute.setXYZ(0,streak.tailPosition.x,streak.tailPosition.y,streak.tailPosition.z);attribute.setXYZ(1,streak.headPosition.x,streak.headPosition.y,streak.headPosition.z);attribute.needsUpdate=true;const fade=Math.sin(Math.PI*streak.progress);streak.line.material.opacity=fade*.78;streak.head.material.opacity=fade;streak.head.position.copy(streak.headPosition);streak.line.visible=true;streak.head.visible=true;}
     glow.material.opacity=motionAllowed ? .31+Math.sin(time*.0011)*.025 : .31;glow.scale.setScalar(motionAllowed ? 3.35+Math.sin(time*.0011)*.1 : 3.35);
     if(transitionDuration){const p=Math.min(1,(time-transitionStarted)/transitionDuration),ease=1-Math.pow(1-p,3);camera.position.lerpVectors(startCamera,cameraGoal,ease);target.lerpVectors(startTarget,targetGoal,ease);if(p>=1)transitionDuration=0;}
-    else if(!dragging){camera.position.z+=(cameraDistance-camera.position.z)*.08;}
+    else if(!dragging){
+      const direction=cameraGoal.clone().sub(targetGoal).normalize();
+      if(direction.lengthSq()<.001)direction.set(0,.24,1).normalize();
+      cameraGoal.copy(targetGoal).addScaledVector(direction,cameraDistance);
+      camera.position.lerp(cameraGoal,.08);
+    }
     camera.lookAt(target);renderer.render(scene,camera);
   }
   frame=requestAnimationFrame(animate);

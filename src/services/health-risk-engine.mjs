@@ -138,7 +138,7 @@ const validDate = (value) => {
 const unique = (values) => [...new Set(values)];
 const formatDelta = (value, unit) => `${value > 0 ? '+' : ''}${Number(value.toFixed(2))} ${unit}`;
 
-function missionContextKey(context = {}) {
+export function missionContextKey(context = {}) {
   const location = Object.hasOwn(MISSION_PROFILES, context.location) ? context.location : 'earth';
   const profileGravity = MISSION_PROFILES[location].gravity;
   const gravity = ['earth', 'microgravity', 'lunar', 'mars', 'artificial', 'unknown'].includes(context.gravity) ? context.gravity : profileGravity;
@@ -266,6 +266,7 @@ export function evaluateHealthRisk({ readings = [], history = [], symptoms = [],
       reasons.push(`A configured ${rule.level} rule was crossed (${rule.direction} ${rule.value} ${unit}) using ${rule.source.name}.`);
     }
 
+    if (state === 'normal' && !(personalBaseline !== null && baselineUnit === unit) && trend.sampleCount < 3) state = 'unknown';
     findings.push({
       id: `metric-${definition.id}`, type: 'measurement', metricId: definition.id,
       label: definition.name, value, unit, state, reasons, trend,

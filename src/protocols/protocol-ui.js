@@ -44,8 +44,21 @@ function readRuns() { try { const data = JSON.parse(localStorage.getItem(KEY) ||
 function renderHistory() {
   const host = section.querySelector('#protocolHistory');
   const runs = readRuns();
-  host.innerHTML = runs.length ? `<h3>Recent protocol actions & outcomes</h3>${runs.slice(0, 5).map((r) => `<article><b>${escapeHtml(r.title)}</b> · ${escapeHtml(r.level?.toUpperCase())}<small>${escapeHtml(new Date(r.at).toLocaleString())} · Follow-up: ${escapeHtml(Object.entries(r.answers || {}).map(([k,v]) => `${k}: ${v}`).join(', '))} · Measurements: ${escapeHtml((r.measurements || []).join(', ') || 'none')} · Action: ${escapeHtml(r.action || 'not recorded')} · Outcome: ${escapeHtml(r.outcome || 'not recorded')}</small></article>`).join('')}` : '';
+  host.innerHTML = runs.length ? `<h3>Recent protocol actions & outcomes</h3>${runs.map((r) => `<article><b>${escapeHtml(r.title)}</b> · ${escapeHtml(r.level?.toUpperCase())}<small>${escapeHtml(new Date(r.at).toLocaleString())} · Follow-up: ${escapeHtml(Object.entries(r.answers || {}).map(([k,v]) => `${k}: ${v}`).join(', '))} · Measurements: ${escapeHtml((r.measurements || []).join(', ') || 'none')} · Action: ${escapeHtml(r.action || 'not recorded')} · Outcome: ${escapeHtml(r.outcome || 'not recorded')} · Status: ${escapeHtml(r.status || 'active')}</small><button type="button" data-resume="${escapeHtml(r.id)}">Review / update outcome</button></article>`).join('')}` : '';
 }
+form.addEventListener('input', () => result.replaceChildren());
+section.querySelector('#protocolHistory').addEventListener('click', event => {
+  const run = readRuns().find(item => item.id === event.target.dataset.resume);
+  if (!run) return;
+  form.reset(); symptomSelect.value = run.kind; renderQuestions();
+  for (const key of ['severity','region','onset']) form.elements[key].value = run[key] ?? '';
+  for (const [key,value] of Object.entries(run.answers)) form.elements['answer-'+key].value = value;
+  for (const measurement of run.measurements || []) {
+    const match = /^(heartRate|bloodPressure|temperature|oxygen|bloodSugar): (.*)$/.exec(measurement);
+    if (match) form.elements[match[1]].value = match[2]; else form.elements.otherMeasurement.value = measurement;
+  }
+  showResult(run); result.scrollIntoView({block:'center'});
+});
 symptomSelect.addEventListener('change', renderQuestions);
 renderQuestions(); renderHistory();
 
@@ -61,17 +74,26 @@ form.addEventListener('submit', (event) => {
   const run = { id: crypto.randomUUID?.() || String(Date.now()), at: new Date().toISOString(), version: PROTOCOL_VERSION, title: decision.protocol.title, kind: symptom, region: String(data.get('region')), severity: Number(data.get('severity')), answers, measurements, onset, level: decision.level, action: '', outcome: '' };
   try { const runs = readRuns(); runs.unshift(run); localStorage.setItem(KEY, JSON.stringify(runs.slice(0, 80))); renderHistory(); } catch { /* The assessment remains visible for this session if storage is unavailable. */ }
   addSymptomEntry({ kind: symptom, region: run.region, severity: run.severity, protocolLevel: run.level, note: [onset && `Onset: ${onset}`, measurements.length && `Measurements: ${measurements.join(', ')}`].filter(Boolean).join(' · '), at: run.at, source: 'medical-protocol' });
+  showResult(run);
+});
+function showResult(run) {
+  const decision = evaluateProtocol({symptom:run.kind, answers:run.answers});
+  const measurements = run.measurements || [];
   const heading = run.level === 'emergency' ? 'EMERGENCY ESCALATION' : run.level === 'urgent' ? 'PROMPT MEDICAL REVIEW' : 'RECORD & MONITOR';
   const contact = run.level === 'emergency' ? 'Now, using the mission emergency communications procedure.' : run.level === 'urgent' ? 'Promptly through the mission medical channel.' : 'For persistent, recurrent, or worsening symptoms through the normal medical channel.';
   result.innerHTML = `<article class="protocol-result" data-level="${run.level}"><strong>${heading}</strong><p>${decision.guidance}</p><p><b>Flight surgeon contact:</b> ${contact}</p>${measurements.length ? `<p><b>Measurements recorded:</b> ${escapeHtml(measurements.join(' · '))}</p>` : ''}<label class="protocol-field">Action taken<input id="protocolAction" maxlength="180" placeholder="What did you do?"></label><label class="protocol-field">Outcome / reassessment<textarea id="protocolOutcome" rows="2" maxlength="240" placeholder="What changed? Include time and follow-up readings."></textarea></label><label class="protocol-field">Current status<select id="protocolStatus"><option value="active">Still ongoing / not resolved</option><option value="improving">Improving, still present</option><option value="resolved">Resolved</option><option value="handed-off">Flight surgeon acknowledged / took over</option></select></label><button id="saveProtocolOutcome" class="button-primary protocol-action" type="button">Save action & outcome</button><p><a class="text-link" href="anatomy.html">View the shared body map →</a> · <a class="text-link" href="assistant.html">Open local assistant →</a></p></article>`;
+  section.querySelector('#protocolAction').value = run.action || '';
+  section.querySelector('#protocolOutcome').value = run.outcome || '';
+  section.querySelector('#protocolStatus').value = run.status || 'active';
   section.querySelector('#saveProtocolOutcome').addEventListener('click', () => {
     run.action = section.querySelector('#protocolAction').value.trim();
     run.outcome = section.querySelector('#protocolOutcome').value.trim();
     run.status = section.querySelector('#protocolStatus').value;
     const runs = readRuns();
-    try { const index = runs.findIndex((saved) => saved.id === run.id); if (index >= 0) runs[index] = run; else runs.unshift(run); localStorage.setItem(KEY, JSON.stringify(runs.slice(0, 80))); renderHistory(); section.querySelector('#saveProtocolOutcome').textContent = 'Saved on this device'; section.querySelector('#saveProtocolOutcome').disabled = true; }
+    try { const index = runs.findIndex((saved) => saved.id === run.id); if (index >= 0) runs[index] = run; else runs.unshift(run); localStorage.setItem(KEY, JSON.stringify(runs.slice(0, 80))); renderHistory(); section.querySelector('#saveProtocolOutcome').textContent = 'Saved on this device'; }
     catch { section.querySelector('#saveProtocolOutcome').textContent = 'Storage unavailable'; }
   });
-});
+  result.oninput = () => { section.querySelector('#saveProtocolOutcome').textContent = 'Save action & outcome'; };
+}
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js').catch(() => {});

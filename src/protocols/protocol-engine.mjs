@@ -35,6 +35,8 @@ export const PROTOCOLS = {
     { id: 'severe', label: 'Is it severe, sudden, or rapidly worsening?' }, { id: 'breathing', label: 'Is breathing difficult or is there chest pain?' }, { id: 'alertness', label: 'Any fainting, confusion, or difficulty staying awake?' },
   ] },
 };
+export const EMERGENCY_GUIDANCE = 'Activate the mission-approved emergency medical checklist now. Notify the Crew Medical Officer / flight surgeon and Mission Control using the mission communications procedure. Keep the person safe and follow trained crew instructions; do not delay for this tool or the AI assistant.';
+
 export function evaluateProtocol({ symptom, answers = {} }) {
   const protocol = PROTOCOLS[symptom] || PROTOCOLS.other;
   const positives = protocol.questions.filter((q) => answers[q.id] === 'yes');
@@ -42,7 +44,19 @@ export function evaluateProtocol({ symptom, answers = {} }) {
   const urgent = ['chest', 'breathing', 'fainting', 'confusion', 'rapid-worsening'].includes(symptom) || positives.length > 0 || uncertain;
   const emergency = positives.length > 0 || ['fainting', 'confusion', 'rapid-worsening'].includes(symptom);
   return { protocol, level: emergency ? 'emergency' : urgent ? 'urgent' : 'monitor', guidance: emergency
-    ? 'Activate the mission-approved emergency medical checklist now. Notify the Crew Medical Officer / flight surgeon and Mission Control using the mission communications procedure. Keep the person safe and follow trained crew instructions; do not delay for this tool or the AI assistant.'
+    ? EMERGENCY_GUIDANCE
     : urgent ? 'Contact the Crew Medical Officer / flight surgeon promptly through the mission medical channel and follow the mission-approved checklist. Avoid activities that could be unsafe while symptomatic. Reassess and report any worsening immediately.'
       : 'Pause optional or hazardous tasks while symptomatic. Recheck and record the symptom and relevant measurements using the mission-approved method; follow the onboard self-care checklist. Contact the Crew Medical Officer / flight surgeon if symptoms persist, recur, worsen, or affect safe task performance. This tool does not diagnose or recommend medication.' };
+}
+
+export function priorityRun(runs) {
+  const priority = { emergency: 3, urgent: 2, monitor: 1 };
+  let selected = null, highest = 0;
+  for (const run of Array.isArray(runs) ? runs : []) {
+    if (!run || run.status === 'handed-off') continue;
+    const { level } = evaluateProtocol({ symptom: run.kind, answers: run.answers });
+    if (run.status === 'resolved' && level !== 'emergency') continue;
+    if (priority[level] > highest) { selected = { ...run, level }; highest = priority[level]; }
+  }
+  return selected;
 }

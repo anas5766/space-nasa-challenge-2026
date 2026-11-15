@@ -33,7 +33,7 @@ The pages are `index.html` (mission overview), `health.html` (readings, trends, 
 - Configurable numeric rules are disabled by default and require explicit medical validation, matching units, and a named source. The assessment is not a diagnosis and escalates urgent symptom categories to mission-approved procedures.
 - Interactive summaries of NASA's five human-spaceflight hazards, with direct NASA and Canadian Space Agency resources.
 - Selectable 3D anatomy structures with colors driven only by recent, user-reported symptoms that match both the selected body area and the anatomical structure. Mission hazards and broad vital-sign trends do not create body-map alerts.
-- Local assistant: a small Node server verifies each selected model against the installed local Ollama model list, rejects cloud models, and proxies requests to Ollama on the same computer. Conversation context stays in page memory for the current session and is not written to browser storage.
+- Local assistant: a small Node server verifies each selected model against the installed local Ollama model list, rejects cloud models, and proxies requests to Ollama on the same computer. Conversation history is saved in this browser’s localStorage and survives reloads. Use Clear in the assistant to erase it.
 - Optional paced breathing, visual attention, and sequence-recall activities. Scores stay in browser storage.
 
 ## Health risk assessment
@@ -42,7 +42,7 @@ The deterministic assessment engine is documented in [`docs/health-risk-engine.m
 
 ## Data and safety
 
-Health readings and symptom notes are stored in this browser's `localStorage`. Ollama prompts and health context go to the local Ollama service through the Node server; they are not sent to a hosted AI service by this app. Conversation context remains in page memory for the current session and is not written to browser storage. The anatomy model and Three.js modules are loaded from public CDNs, so the 3D viewer needs an internet connection.
+Health readings and symptom notes are stored in this browser's `localStorage`. Ollama prompts and health context go to the local Ollama service through the Node server; they are not sent to a hosted AI service by this app. Conversation history is saved in this browser’s localStorage and survives reloads. Use Clear in the assistant to erase it. The anatomy model and Three.js modules are loaded from public CDNs, so the 3D viewer needs an internet connection.
 
 This is an educational hackathon prototype, not a medical device or clinical decision system. The dashboard ranges are illustrative and not personalized clinical thresholds. The local model can make mistakes; it cannot diagnose, prescribe, or replace a Crew Medical Officer, flight surgeon, approved mission checklist, or other mission-specific medical direction. New, severe, or worsening symptoms should be shared with the crew medical team using the mission's approved procedures.
 

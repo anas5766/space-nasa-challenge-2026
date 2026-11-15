@@ -1,3 +1,4 @@
+import { priorityRun } from './protocols/protocol-engine.mjs';
 import { announceHealthStateChange, readHealthSnapshot } from './health-state.js';
 
 announceHealthStateChange();
@@ -8,7 +9,7 @@ import('./medical-assistant.js').then(({ initMedicalAssistant }) => initMedicalA
     let protocolContext = 'No saved structured protocol run.';
     try {
       const runs = JSON.parse(localStorage.getItem('valmed-protocol-runs-v1') || '[]');
-      const latest = Array.isArray(runs) ? runs[0] : null;
+      const latest = priorityRun(runs);
       if (latest) protocolContext = JSON.stringify({ title: latest.title, level: latest.level, at: latest.at, followUpAnswers: latest.answers, measurements: latest.measurements, action: latest.action, outcome: latest.outcome });
     } catch { /* The deterministic protocol remains available even if optional context cannot be read. */ }
     const now = Date.now();
@@ -35,7 +36,7 @@ document.querySelectorAll('.assistant-shortcuts [data-prompt]').forEach((button)
 }));
 try {
   const runs = JSON.parse(localStorage.getItem('valmed-protocol-runs-v1') || '[]');
-  const latest = Array.isArray(runs) ? runs[0] : null;
+  const latest = priorityRun(runs);
   const active = latest && latest.status !== 'handed-off' && (latest.status !== 'resolved' || latest.level === 'emergency');
   if (active) {
     const notice = document.createElement('aside');

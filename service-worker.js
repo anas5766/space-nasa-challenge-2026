@@ -1,4 +1,4 @@
-const CACHE='valmed-health-assessment-v5';
+const CACHE='valmed-health-assessment-v6';
 const CORE=['/health.html','/anatomy.html','/src/styles.css','/src/presentation.css','/src/visual-polish.css','/src/protocols/protocols.css','/src/site-shell.js','/src/page-clock.js','/src/health-page.js','/src/anatomy.js','/src/anatomy-health-map.mjs','/src/anatomy-callout.css','/src/data/demo-mission.mjs','/src/data/health-history.mjs','/src/health-state.js','/src/protocols/protocol-ui.js','/src/protocols/protocol-engine.mjs','/src/services/health-risk-engine.mjs','/src/services/validated-thresholds.js','/src/services/health-risk-ui.css'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>(k.startsWith('valmed-protocol-offline-')||k.startsWith('valmed-health-assessment-'))&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));

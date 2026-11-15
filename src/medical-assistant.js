@@ -1,5 +1,5 @@
 import { addSymptomEntry, clearPendingMedicalAlert, readPendingMedicalAlert } from './health-state.js';
-import { evaluateProtocol } from './protocols/protocol-engine.mjs';
+import { EMERGENCY_GUIDANCE, evaluateProtocol, priorityRun } from './protocols/protocol-engine.mjs';
 
 const SYSTEM_PROMPT = `You are Valmed's local spaceflight health support assistant. Provide useful, specific, calm first-aid information and decision support for an astronaut. You are not a clinician and cannot establish a diagnosis or issue a prescription; do not use this limitation as a reason to refuse ordinary health guidance.
 
@@ -43,7 +43,7 @@ function readSavedConversation() {
 function readActiveProtocol() {
   try {
     const runs = JSON.parse(localStorage.getItem('valmed-protocol-runs-v1') || '[]');
-    const latest = Array.isArray(runs) ? runs[0] : null;
+    const latest = priorityRun(runs);
     if (!latest || latest.status === 'handed-off') return null;
     const decision = evaluateProtocol({ symptom: latest.kind, answers: latest.answers || {} });
     if (latest.status === 'resolved' && decision.level !== 'emergency') return null;
@@ -246,7 +246,7 @@ export function initMedicalAssistant({ getContext }) {
       : /rapidly worsening|getting worse quickly/.test(text) ? 'rapid-worsening'
       : /severe new weakness/.test(text) ? 'weakness'
       : /breath|breathing|short of breath/.test(text) ? 'breathing'
-      : /chest pain|chest pressure|tightness/.test(text) ? 'chest'
+      : /chest pain|chest pressure|dolor (?:intenso )?en el pecho|presi[oó]n en el pecho|tightness/.test(text) ? 'chest'
       : /headache|dizz/.test(text) ? 'headache'
       : /vision|blurry|seeing/.test(text) ? 'vision'
       : /nausea|nauseous|vomit/.test(text) ? 'nausea'
@@ -257,6 +257,11 @@ export function initMedicalAssistant({ getContext }) {
   }
 
   function recordCurrentConversationSymptom(value) {
+    const clauses = String(value).split(/\b(?:but|however|pero)\b/i);
+    if (clauses.length > 1) {
+      if (/\b(?:what if|hypothetically|for example|if someone)\b/i.test(value)) return false;
+      return clauses.map(recordCurrentConversationSymptom).some(Boolean);
+    }
     const text = String(value || '').toLowerCase();
     const symptomCandidate = /pain|ache|pressure|tightness|breath|headache|dizz|vision|nausea|vomit|weak|sore|tingl|unwell|faint|confus|rash|burn|symptom|injur|hurt|wound|fractur|dolor|duele|molestia|lesi[oó]n|herida|golpe|torcedura/.test(text);
     const bodyPart = /head|brain|eye|face|jaw|ear|neck|throat|chest|heart|lung|rib|stomach|abdomen|belly|kidney|back|spine|shoulder|arm|elbow|wrist|hand|finger|hip|leg|knee|ankle|foot|muscle|bone|cabeza|cerebro|ojo|cara|mand[ií]bula|o[ií]do|cuello|garganta|pecho|coraz[oó]n|pulm[oó]n|costilla|est[oó]mago|abdomen|ri[nñ][oó]n|espalda|columna|hombro|brazo|codo|mu[nñ]eca|mano|dedo|cadera|pierna|rodilla|tobillo|pie|m[uú]sculo|hueso/.test(text);
@@ -264,10 +269,8 @@ export function initMedicalAssistant({ getContext }) {
     const negatedOrHypothetical = /\b(?:what if|hypothetically|for example|if someone|if an astronaut|if the patient|i do not have|i don't have|i have no|i am not|i'm not|no symptoms|used to|previously|yesterday|resolved|gone now|no longer|stopped|no tengo|no me duele|no presenta|sin dolor|sin s[ií]ntomas)\b/.test(text);
     if (!symptomCandidate || !bodyPart || !currentReport || negatedOrHypothetical) return false;
     const suggestion = suggestSymptomFromText(value);
-    const severe = /chest pain|chest pressure|difficulty breathing|shortness of breath|faint|passed out|sudden confusion|severe|rapidly worsening|dolor (?:intenso )?en el pecho|presi[oó]n en el pecho|me cuesta respirar|falta de aire|desmay|confusi[oó]n repentina|debilidad intensa|empeorando r[aá]pidamente|grave|muy fuerte/.test(text);
     addSymptomEntry({
       ...suggestion,
-      severity: severe ? Math.max(8, suggestion.severity) : suggestion.severity,
       note: String(value).slice(0, 160),
       at: new Date().toISOString(),
       source: 'assistant-chat',
@@ -404,13 +407,16 @@ export function initMedicalAssistant({ getContext }) {
     root.classList.add('is-thinking');
     try {
       const activeProtocol = readActiveProtocol();
-      if (activeProtocol) {
-        const answerText = `STRUCTURED PROTOCOL PRIORITY — ${activeProtocol.protocol.title}\n\n${activeProtocol.guidance}\n\nOllama was not used for this reply so it cannot contradict the active protocol. Record an action and outcome in Health; mark the flight-surgeon handoff only after the medical team has acknowledged the case.`;
+      if (activeProtocol || currentRedFlag) {
+        const answerText = currentRedFlag ? EMERGENCY_GUIDANCE : `STRUCTURED PROTOCOL PRIORITY — ${activeProtocol.protocol.title}\n\n${activeProtocol.guidance}\n\nOllama was not used for this reply so it cannot contradict the active protocol. Record an action and outcome in Health; mark the flight-surgeon handoff only after the medical team has acknowledged the case.`;
         answer.classList.remove('thinking');
         answer.querySelector('p').textContent = answerText;
         chatHistory.push({ role: 'assistant', content: answerText });
         persistConversation();
-        if (attachedAlertId) clearPendingMedicalAlert(attachedAlertId);
+        if (attachedAlertId) {
+          clearPendingMedicalAlert(attachedAlertId);
+          if (pendingHealthAlert?.id === attachedAlertId) showHealthAlert(null);
+        }
         return;
       }
       const context = getContext();

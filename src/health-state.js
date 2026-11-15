@@ -34,6 +34,8 @@ export function readHealthHistory() {
   return readArray('orbital-history').filter((item) => item && typeof item === 'object');
 }
 
+export const metricLabel = (level) => ({normal:'STABLE', warning:'ATTENTION', moderate:'MODERATE', critical:'CRITICAL'})[level] || 'UNKNOWN';
+
 export function metricStatus(value, low, high) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 'unknown';
